@@ -1,0 +1,98 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-packages-and-api:
+    name: Test Packages & Backend API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Build Shared Packages
+        run: npm run build:packages
+
+      - name: Run Backend Vitest Tests
+        run: npm --workspace=@schedulai/api run test
+
+      - name: Build Backend API
+        run: npm --workspace=@schedulai/api run build
+
+  test-frontend:
+    name: Test & Build Frontend Web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Build Shared Packages
+        run: npm run build:packages
+
+      - name: Run Web Vitest Tests
+        run: npm --workspace=@schedulai/web run test
+
+      - name: Build Web Application
+        run: npm --workspace=@schedulai/web run build
+
+  test-scheduler:
+    name: Test Python OR-Tools Scheduler
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        working-directory: services/scheduler
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest Test Suite
+        working-directory: services/scheduler
+        run: pytest
+
+  docker-build-check:
+    name: Verify Docker Builds
+    runs-on: ubuntu-latest
+    needs: [test-packages-and-api, test-frontend, test-scheduler]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Scheduler Docker Image
+        run: docker build -t schedulai-scheduler:test ./services/scheduler
+
+      - name: Build API Docker Image
+        run: docker build -t schedulai-api:test -f apps/api/Dockerfile .
+
+      - name: Build Web Docker Image
+        run: docker build -t schedulai-web:test -f apps/web/Dockerfile .
