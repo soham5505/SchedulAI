@@ -1,0 +1,38 @@
+import { Router } from 'express';
+import { authRouter } from '../modules/auth/auth.routes.js';
+import { userRouter } from '../modules/users/user.routes.js';
+import { departmentRouter } from '../modules/departments/department.routes.js';
+import { teacherRouter } from '../modules/teachers/teacher.routes.js';
+import { subjectRouter } from '../modules/subjects/subject.routes.js';
+import { classroomRouter } from '../modules/classrooms/classroom.routes.js';
+import { semesterRouter } from '../modules/semesters/semester.routes.js';
+import { timeslotRouter } from '../modules/timeslots/timeslot.routes.js';
+import { assignmentRouter } from '../modules/assignments/assignment.routes.js';
+import { timetableRouter } from '../modules/timetables/timetable.routes.js';
+import { generationRouter } from '../modules/generations/generation.routes.js';
+import { importRouter } from '../modules/imports/import.routes.js';
+import { exportRouter } from '../modules/exports/export.routes.js';
+import { aiRouter } from '../modules/ai/ai.routes.js';
+import { auditRouter } from '../modules/audit/audit.routes.js';
+import { dashboardRouter } from '../modules/dashboard/dashboard.routes.js';
+
+const router = Router();
+
+router.use('/auth', authRouter);
+router.use('/users', userRouter);
+router.use('/departments', departmentRouter);
+router.use('/teachers', teacherRouter);
+router.use('/subjects', subjectRouter);
+router.use('/classrooms', classroomRouter);
+router.use('/semesters', semesterRouter);
+router.use('/timeslots', timeslotRouter);
+router.use('/assignments', assignmentRouter);
+router.use('/timetables', timetableRouter);
+router.use('/generations', generationRouter);
+router.use('/import', importRouter);
+router.use('/export', exportRouter);
+router.use('/ai', aiRouter);
+router.use('/audit-logs', auditRouter);
+router.use('/dashboard', dashboardRouter);
+
+export const apiV1Router = router;
