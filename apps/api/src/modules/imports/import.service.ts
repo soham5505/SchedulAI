@@ -7,6 +7,7 @@ import { ClassroomModel } from '../../models/classroom.model.js';
 import { SemesterModel } from '../../models/semester.model.js';
 import { TimeSlotModel } from '../../models/timeslot.model.js';
 import { TeachingAssignmentModel } from '../../models/assignment.model.js';
+import { BatchModel } from '../../models/batch.model.js';
 import { DepartmentModel } from '../../models/department.model.js';
 import { ApiError } from '../../middleware/error.middleware.js';
 import { ERROR_CODES } from '@schedulai/config';
@@ -56,6 +57,8 @@ export class ImportService {
         studentCount: ['studentcount', 'students', 'strength', 'enrolled'],
         designation: ['designation', 'role', 'title', 'position'],
         departmentCode: ['department', 'dept', 'deptcode', 'departmentcode'],
+        batchCode: ['batch', 'batchcode', 'batchname', 'group', 'cohort'],
+        location: ['location', 'classroom', 'room', 'roomnumber', 'lab'],
       };
 
       for (const [targetKey, synonyms] of Object.entries(patterns)) {
@@ -112,39 +115,28 @@ export class ImportService {
       ? new mongoose.Types.ObjectId(departmentId)
       : departments[0]?._id;
 
-    // Track processed teaching assignments to detect and consolidate batch identifiers
-    // Key: "${teacherId}|${baseCourseCode}|${semesterId}" (without batch suffix)
-    const processedAssignments = new Map<string, { teacherId: string; subjectId: string; semesterId: string; periodsPerWeek: number; rowNumber: number }>();
-    const batchConsolidationLog: Array<{ row: number; message: string }> = [];
+    const processedAssignments = new Map<string, { rowNumber: number }>();
 
-    // Helper function to extract base course code (remove batch identifiers like B1-B4, W1-W4, D1-D2)
-    // Also checks other fields in the row for batch indicators
-    const getBaseCourseCode = (code: string, row?: Record<string, unknown>): { baseCourseCode: string; hasBatchIndicator: boolean } => {
-      // First, remove batch patterns from the code itself
-      let baseCourseCode = code
-        .replace(/\s*[BWD]\d(?:-[BWD]?\d+)?$/i, '') // Matches B1-B4, W1-W4, D1-D2 at end
-        .replace(/\s*\([BWD]\d(?:-[BWD]?\d+)?\)\s*$/i, '') // Matches (B1-B4) at end
-        .trim();
-      
-      const codeHasBatch = baseCourseCode !== code;
-      
-      // Also check for batch indicators in other row fields
-      let rowHasBatchField = false;
-      if (row) {
-        const rowValues = Object.values(row)
-          .map(v => String(v || '').trim().toUpperCase())
-          .join(' ');
-        
-        // Check for common batch patterns in row data
-        if (/\b(B[1-4]|W[1-4]|D[1-2]|BATCH|SECTION|GROUP|COHORT)\b/.test(rowValues)) {
-          rowHasBatchField = true;
+    const normalizeBatchCode = (value: string) => {
+      const trimmed = value.trim().toUpperCase();
+      if (!trimmed || trimmed === '--' || trimmed === 'ALL') return null;
+      const normalized = trimmed.replace(/^([A-Z])-([0-9]+)$/, '$1$2');
+      if (!/^[A-Z0-9][A-Z0-9_-]*$/.test(normalized)) {
+        throw new Error(`Invalid batch code '${value}'`);
+      }
+      return normalized;
+    };
+
+    const getBaseCourseCode = (code: string, batchCodes: string[]) => {
+      const orderedCodes = [...batchCodes].sort((left, right) => right.length - left.length);
+      for (const batchCode of orderedCodes) {
+        const escapedBatchCode = batchCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const suffix = new RegExp(`[\\s_-]+${escapedBatchCode}$`, 'i');
+        if (suffix.test(code)) {
+          return code.replace(suffix, '').trim();
         }
       }
-      
-      return {
-        baseCourseCode,
-        hasBatchIndicator: codeHasBatch || rowHasBatchField
-      };
+      return code.trim();
     };
 
     for (let i = 0; i < rows.length; i++) {
@@ -264,14 +256,14 @@ export class ImportService {
         } else if (type === 'ASSIGNMENTS') {
           const teacherEmpId = String(row[columnMapping.employeeId || 'employeeId'] || '').trim();
           const teacherEmail = String(row[columnMapping.email || 'email'] || '').trim().toLowerCase();
-          const subjectCode = String(row[columnMapping.code || 'code'] || '').trim().toUpperCase();
+          const rawSubjectCode = String(row[columnMapping.code || 'code'] || '').trim().toUpperCase();
           const semesterName = String(row[columnMapping.name || 'name'] || '').trim();
           const periodsPerWeek = Number(row[columnMapping.weeklyPeriods || 'weeklyPeriods']) || 4;
 
           // Validate required fields before hitting DB
           if (!teacherEmpId && !teacherEmail)
             throw new Error(`Row ${rowNumber}: Teacher Employee ID is missing — check the column mapping for 'Teacher Employee ID'`);
-          if (!subjectCode)
+          if (!rawSubjectCode)
             throw new Error(`Row ${rowNumber}: Subject Code is missing — check the column mapping for 'Subject Code'`);
           if (!semesterName)
             throw new Error(`Row ${rowNumber}: Semester Name is missing — check the column mapping for 'Semester Name'`);
@@ -284,11 +276,7 @@ export class ImportService {
           if (!teacher)
             throw new Error(`Row ${rowNumber}: Teacher with Employee ID '${teacherEmpId || teacherEmail}' not found in the database`);
 
-          const subject = await SubjectModel.findOne({ code: subjectCode });
-          if (!subject)
-            throw new Error(`Row ${rowNumber}: Subject with code '${subjectCode}' not found in the database`);
-
-          // Case-insensitive, trim-safe semester lookup
+          // Resolve semester first — needed for batch lookup
           const escapedName = semesterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const semester = await SemesterModel.findOne({
             name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
@@ -296,50 +284,68 @@ export class ImportService {
           if (!semester)
             throw new Error(`Row ${rowNumber}: Semester '${semesterName}' not found — ensure it exists in the Semesters & Batches table`);
 
-          // Detect batch identifier patterns in subject code and row data
-          const { baseCourseCode, hasBatchIndicator } = getBaseCourseCode(subjectCode, row);
-          
-          // Create deduplication key: treat all batch variants as the same assignment
-          const assignmentKey = `${teacher._id}|${baseCourseCode}|${semester._id}`;
-          
+          const batchRecords = await BatchModel.find({ semesterId: semester._id, isActive: true }).lean();
+          const explicitBatchColumn = Boolean(columnMapping.batchCode);
+          const explicitBatch = explicitBatchColumn
+            ? String(row[columnMapping.batchCode] || '')
+            : '';
+          const normalizedExplicitBatch = normalizeBatchCode(explicitBatch);
+          const embeddedBatchCode = !explicitBatchColumn
+            ? batchRecords
+              .map((batch) => normalizeBatchCode(batch.code))
+              .filter((code): code is string => Boolean(code))
+              .find((code) => new RegExp(`[\\s_-]+${code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i').test(rawSubjectCode))
+            : null;
+          const batchCode = normalizedExplicitBatch || embeddedBatchCode;
+          const baseCourseCode = getBaseCourseCode(rawSubjectCode, batchCode ? [batchCode] : []);
+          const subject = await SubjectModel.findOne({ code: baseCourseCode });
+          if (!subject)
+            throw new Error(`Row ${rowNumber}: Subject with code '${baseCourseCode}' not found in the database`);
+
+          let batchId: mongoose.Types.ObjectId | undefined;
+          if (batchCode) {
+            const batch = await BatchModel.findOne({ semesterId: semester._id, code: batchCode }).lean();
+            if (!batch) throw new Error(`Row ${rowNumber}: Batch '${batchCode}' not found in semester '${semesterName}'`);
+            batchId = batch._id;
+          }
+
+          const location = String(row[columnMapping.location || 'location'] || '').trim();
+          let classroomId: mongoose.Types.ObjectId | undefined;
+          if (location) {
+            const classroom = await ClassroomModel.findOne({
+              $or: [
+                { name: { $regex: `^${location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } },
+                { roomNumber: location },
+              ],
+            }).lean();
+            if (!classroom) throw new Error(`Row ${rowNumber}: Classroom/location '${location}' not found`);
+            classroomId = classroom._id;
+          }
+
+          const assignmentKey = `${teacher._id}|${subject._id}|${semester._id}|${batchId?.toString() || 'ALL'}`;
+
           if (processedAssignments.has(assignmentKey)) {
-            // This is a duplicate batch assignment - log and skip
             const existing = processedAssignments.get(assignmentKey)!;
-            if (hasBatchIndicator) {
-              batchConsolidationLog.push({
-                row: rowNumber,
-                message: `Batch variant of assignment (row ${existing.rowNumber}) detected and skipped. Using first occurrence only.`
-              });
-              successCount++; // Count as success but don't insert
-              logger.info(`Batch consolidation: Row ${rowNumber} skipped, using row ${existing.rowNumber} for ${baseCourseCode}`);
-            }
+            throw new Error(`Row ${rowNumber}: Duplicate assignment for this teacher, course, semester, and batch (first seen on row ${existing.rowNumber})`);
           } else {
-            // First occurrence - process normally
             await TeachingAssignmentModel.findOneAndUpdate(
-              { teacherId: teacher._id, subjectId: subject._id, semesterId: semester._id },
+              { teacherId: teacher._id, subjectId: subject._id, semesterId: semester._id, batchId: batchId || null },
               {
                 teacherId: teacher._id,
                 subjectId: subject._id,
                 semesterId: semester._id,
+                batchId: batchId || null,
+                classroomId: classroomId || null,
                 periodsPerWeek,
                 isLab: subject.isLab,
               },
               { upsert: true, new: true }
             );
-            
+
             // Track this assignment
             processedAssignments.set(assignmentKey, {
-              teacherId: teacher._id.toString(),
-              subjectId: subject._id.toString(),
-              semesterId: semester._id.toString(),
-              periodsPerWeek,
               rowNumber
             });
-            
-            if (hasBatchIndicator) {
-              logger.info(`Assignment processed with batch consolidation enabled for ${baseCourseCode} (row ${rowNumber})`);
-            }
-            
             successCount++;
           }
         } else if (type === 'TIMESLOTS') {
@@ -387,13 +393,6 @@ export class ImportService {
     job.status = errors.length === rows.length ? 'FAILED' : 'COMPLETED';
     job.completedAt = new Date();
     await job.save();
-
-    if (type === 'ASSIGNMENTS' && batchConsolidationLog.length > 0) {
-      logger.info(`Batch consolidation: ${batchConsolidationLog.length} batch variants consolidated during import`);
-      for (const log of batchConsolidationLog) {
-        logger.info(`  Row ${log.row}: ${log.message}`);
-      }
-    }
 
     logger.info(`Import ${type} finished: ${successCount} successful, ${errors.length} errors.`);
 

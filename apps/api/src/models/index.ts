@@ -4,6 +4,7 @@ export * from './teacher.model.js';
 export * from './subject.model.js';
 export * from './classroom.model.js';
 export * from './semester.model.js';
+export * from './batch.model.js';
 export * from './timeslot.model.js';
 export * from './assignment.model.js';
 export * from './timetable.model.js';

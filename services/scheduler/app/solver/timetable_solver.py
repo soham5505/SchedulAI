@@ -9,6 +9,7 @@ from ..models.input_models import (
     SubjectInput,
     ClassroomInput,
     SemesterInput,
+    BatchInput,
     TimeSlotInput,
     AssignmentInput,
 )
@@ -26,6 +27,7 @@ class TimetableSolver:
         self.subjects = {s.id: s for s in request.subjects}
         self.classrooms = {c.id: c for c in request.classrooms}
         self.semesters = {m.id: m for m in request.semesters}
+        self.batches = {b.id: b for b in request.batches}
         self.timeslots = {ts.id: ts for ts in request.timeslots if ts.isActive and not ts.isBreak}
         self.assignments = request.teachingAssignments
         self.hard_constraints = request.hardConstraints
@@ -51,6 +53,16 @@ class TimetableSolver:
         self.timeslots_by_day: Dict[DayOfWeek, List[TimeSlotInput]] = {}
         for ts in self.sorted_timeslots:
             self.timeslots_by_day.setdefault(ts.day, []).append(ts)
+
+    @staticmethod
+    def _student_scope(batch_id: Optional[str]) -> str:
+        return batch_id or "ALL"
+
+    def _student_count(self, assignment: AssignmentInput) -> int:
+        if assignment.batchId and assignment.batchId in self.batches:
+            return self.batches[assignment.batchId].studentCount
+        semester = self.semesters.get(assignment.semesterId)
+        return semester.studentCount if semester else 0
 
     def _print_diagnostics(self) -> None:
         """Print diagnostic information about semester and faculty workload."""
@@ -208,8 +220,11 @@ class TimetableSolver:
 
                         # Capacity check
                         if self.hard_constraints.enforceClassroomCapacity:
-                            if c.capacity < semester.studentCount:
+                            if c.capacity < self._student_count(a):
                                 continue
+
+                        if a.classroomId and c.id != a.classroomId:
+                            continue
 
                         # Lab check
                         is_lab_instance = a.isLab or subject.isLab
@@ -289,19 +304,45 @@ class TimetableSolver:
                     if room_vars:
                         model.AddAtMostOne(room_vars)
 
-        # Semester No-Overlap: At most one class per timeslot for each semester
+        # Student scope no-overlap:
+        #   - ALL: blocks every other assignment in the same semester at the same time.
+        #   - Batch B_N: conflicts only with same batch B_N OR with an ALL assignment.
+        #   - Different specific batches (B1 vs B2) may run in parallel.
         if self.hard_constraints.enforceSemesterConflicts:
             for sem_id in self.semesters:
                 for ts in self.sorted_timeslots:
-                    sem_vars = []
+                    scope_vars: Dict[str, List[cp_model.IntVar]] = {}
                     for a in self.assignments:
                         if a.semesterId == sem_id:
+                            scope = self._student_scope(a.batchId)
+                            scope_vars.setdefault(scope, [])
                             for k in range(a.periodsPerWeek):
                                 for c in self.classrooms.values():
                                     if (a.id, k, ts.id, c.id) in x:
-                                        sem_vars.append(x[(a.id, k, ts.id, c.id)])
-                    if sem_vars:
-                        model.AddAtMostOne(sem_vars)
+                                        scope_vars[scope].append(x[(a.id, k, ts.id, c.id)])
+
+                    all_vars = scope_vars.get("ALL", [])
+
+                    # ALL vs ALL: at most one ALL assignment at any time
+                    if all_vars:
+                        model.AddAtMostOne(all_vars)
+
+                    # Each specific batch: at most one per timeslot
+                    for scope, b_vars in scope_vars.items():
+                        if scope == "ALL":
+                            continue
+                        if b_vars:
+                            model.AddAtMostOne(b_vars)
+
+                    # ALL vs each specific batch: if an ALL is active, no batch may
+                    # run at the same time (and vice versa).
+                    if all_vars:
+                        for scope, b_vars in scope_vars.items():
+                            if scope == "ALL":
+                                continue
+                            if b_vars:
+                                # Together they must sum to at most 1
+                                model.AddAtMostOne(all_vars + b_vars)
 
         # Teacher Workload Limits
         if self.hard_constraints.enforceTeacherWorkloadLimits:
@@ -412,6 +453,7 @@ class TimetableSolver:
                     timetable.append(
                         TimetableEntryOutput(
                             semesterId=assignment.semesterId,
+                            batchId=assignment.batchId,
                             subjectId=assignment.subjectId,
                             teacherId=assignment.teacherId,
                             classroomId=c_id,
@@ -479,22 +521,50 @@ class TimetableSolver:
             ))
             return violations
 
-        # Check total semester period demand vs available time slots
-        sem_demand: Dict[str, int] = {}
+        # Check semester period demand vs available time slots.
+        # Batch-aware: different specific batches may run in parallel, so they each
+        # independently consume slots.  The semester "sequential" demand is:
+        #   ALL-scope periods  +  max(periods per individual batch)
+        # This gives a conservative lower-bound on slots needed.
+        sem_all_demand: Dict[str, int] = {}    # sum of ALL-scope periods per semester
+        sem_batch_demand: Dict[str, Dict[str, int]] = {}  # per-batch demand: sem -> batch -> periods
         teacher_demand: Dict[str, int] = {}
 
         for a in self.assignments:
-            sem_demand[a.semesterId] = sem_demand.get(a.semesterId, 0) + a.periodsPerWeek
             teacher_demand[a.teacherId] = teacher_demand.get(a.teacherId, 0) + a.periodsPerWeek
+            scope = self._student_scope(a.batchId)
+            if scope == "ALL":
+                sem_all_demand[a.semesterId] = sem_all_demand.get(a.semesterId, 0) + a.periodsPerWeek
+            else:
+                if a.semesterId not in sem_batch_demand:
+                    sem_batch_demand[a.semesterId] = {}
+                sem_batch_demand[a.semesterId][scope] = (
+                    sem_batch_demand[a.semesterId].get(scope, 0) + a.periodsPerWeek
+                )
 
-        for sem_id, demand in sem_demand.items():
+        # Collect all semester IDs we need to check
+        all_sem_ids = set(sem_all_demand.keys()) | set(sem_batch_demand.keys())
+
+        for sem_id in all_sem_ids:
             sem = self.semesters.get(sem_id)
             name = sem.name if sem else sem_id
+
+            all_periods = sem_all_demand.get(sem_id, 0)
+            batch_periods = sem_batch_demand.get(sem_id, {})
+            # Max single-batch demand (batches can be parallel, but each batch still
+            # needs its own sequential slots)
+            max_batch = max(batch_periods.values(), default=0)
+            demand = all_periods + max_batch
+
             if demand > num_slots:
                 violations.append(ViolationOutput(
                     type="SEMESTER_SLOT_EXCEEDED",
                     severity="ERROR",
-                    message=f"Semester '{name}' requires {demand} weekly periods, but only {num_slots} active time slots exist.",
+                    message=(
+                        f"Semester '{name}' requires at least {demand} sequential time slots "
+                        f"({all_periods} whole-class + {max_batch} max single-batch), "
+                        f"but only {num_slots} active time slots exist."
+                    ),
                     entityType="SEMESTER",
                     entityId=sem_id,
                     details={"required": demand, "availableSlots": num_slots}

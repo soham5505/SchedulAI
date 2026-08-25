@@ -5,6 +5,8 @@ export interface ITeachingAssignmentDocument extends Document {
   teacherId: mongoose.Types.ObjectId;
   subjectId: mongoose.Types.ObjectId;
   semesterId: mongoose.Types.ObjectId;
+  batchId?: mongoose.Types.ObjectId;
+  classroomId?: mongoose.Types.ObjectId;
   classroomRequirements: string[];
   periodsPerWeek: number;
   isLab: boolean;
@@ -30,6 +32,18 @@ const TeachingAssignmentSchema = new Schema<ITeachingAssignmentDocument>(
       type: Schema.Types.ObjectId,
       ref: 'Semester',
       required: [true, 'Semester is required'],
+      index: true,
+    },
+    batchId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Batch',
+      default: null,
+      index: true,
+    },
+    classroomId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Classroom',
+      default: null,
       index: true,
     },
     classroomRequirements: {
@@ -60,7 +74,7 @@ const TeachingAssignmentSchema = new Schema<ITeachingAssignmentDocument>(
 );
 
 TeachingAssignmentSchema.index(
-  { teacherId: 1, subjectId: 1, semesterId: 1 },
+  { teacherId: 1, subjectId: 1, semesterId: 1, batchId: 1 },
   { unique: true }
 );
 

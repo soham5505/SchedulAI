@@ -17,6 +17,7 @@ class TimetableValidator:
         self.subjects = {s.id: s for s in request.subjects}
         self.classrooms = {c.id: c for c in request.classrooms}
         self.semesters = {m.id: m for m in request.semesters}
+        self.batches = {b.id: b for b in request.batches}
         self.timeslots = {ts.id: ts for ts in request.timeslots}
         self.assignments = request.teachingAssignments
 
@@ -27,7 +28,7 @@ class TimetableValidator:
         teacher_slots: Dict[Tuple[str, str], List[ExistingTimetableEntryInput]] = {}
         # 2. Classroom conflicts: Same classroom, same timeSlotId
         classroom_slots: Dict[Tuple[str, str], List[ExistingTimetableEntryInput]] = {}
-        # 3. Semester conflicts: Same semester, same timeSlotId
+        # 3. Student-scope conflicts: same batch, or any batch with ALL
         semester_slots: Dict[Tuple[str, str], List[ExistingTimetableEntryInput]] = {}
         # Teacher day counts: (teacherId, day) -> count
         teacher_day_counts: Dict[Tuple[str, DayOfWeek], int] = {}
@@ -73,14 +74,15 @@ class TimetableValidator:
             classroom = self.classrooms.get(entry.classroomId)
             semester = self.semesters.get(entry.semesterId)
             if classroom and semester:
-                if classroom.capacity < semester.studentCount:
+                student_count = self.batches.get(entry.batchId).studentCount if entry.batchId in self.batches else semester.studentCount
+                if classroom.capacity < student_count:
                     violations.append(ViolationOutput(
                         type="CLASSROOM_CAPACITY_EXCEEDED",
                         severity="ERROR",
-                        message=f"Classroom '{classroom.name}' (capacity {classroom.capacity}) cannot accommodate semester '{semester.name}' ({semester.studentCount} students).",
+                        message=f"Classroom '{classroom.name}' (capacity {classroom.capacity}) cannot accommodate semester '{semester.name}' ({student_count} students).",
                         entityType="CLASSROOM",
                         entityId=classroom.id,
-                        details={"capacity": classroom.capacity, "students": semester.studentCount}
+                        details={"capacity": classroom.capacity, "students": student_count}
                     ))
 
             # Check Lab Requirement
@@ -128,9 +130,17 @@ class TimetableValidator:
                     details={"timeSlotId": ts_id, "conflictingCount": len(entries)}
                 ))
 
-        # Check Semester Overlaps
+        # Check student-scope overlaps. Legacy entries without batch are ALL.
         for (s_id, ts_id), entries in semester_slots.items():
-            if len(entries) > 1:
+            scopes: Dict[str, List[ExistingTimetableEntryInput]] = {}
+            for entry in entries:
+                scopes.setdefault(entry.batchId or "ALL", []).append(entry)
+            conflicting_entries: List[ExistingTimetableEntryInput] = []
+            if "ALL" in scopes:
+                conflicting_entries = entries if len(entries) > 1 else []
+            else:
+                conflicting_entries = [entry for group in scopes.values() if len(group) > 1 for entry in group]
+            if conflicting_entries:
                 semester = self.semesters.get(s_id)
                 s_name = semester.name if semester else s_id
                 ts = self.timeslots.get(ts_id)
@@ -138,10 +148,10 @@ class TimetableValidator:
                 violations.append(ViolationOutput(
                     type="SEMESTER_CONFLICT",
                     severity="ERROR",
-                    message=f"Semester '{s_name}' has {len(entries)} classes scheduled simultaneously at {time_str}.",
+                    message=f"Semester '{s_name}' has {len(conflicting_entries)} classes scheduled simultaneously at {time_str}.",
                     entityType="SEMESTER",
                     entityId=s_id,
-                    details={"timeSlotId": ts_id, "conflictingCount": len(entries)}
+                    details={"timeSlotId": ts_id, "conflictingCount": len(conflicting_entries)}
                 ))
 
         # Check Daily and Weekly Teacher Limits

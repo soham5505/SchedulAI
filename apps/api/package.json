@@ -17,7 +17,10 @@
     "cleanup:batch-duplicates": "tsx src/scripts/cleanup-batch-duplicates.ts",
     "cleanup:course-duplicates": "tsx src/scripts/cleanup-course-duplicates.ts",
     "test:batch-detection": "tsx src/scripts/test-batch-detection.ts",
-    "diagnostic:assignments": "tsx src/scripts/diagnostic-assignments.ts"
+    "diagnostic:assignments": "tsx src/scripts/diagnostic-assignments.ts",
+    "migrate:001-create-batches": "tsx src/scripts/migrations/001-create-batches.ts",
+    "migrate:002-add-batch-references": "tsx src/scripts/migrations/002-add-batch-references.ts"
+    ,"migrate:003-batch-aware-assignment-index": "tsx src/scripts/migrations/003-batch-aware-assignment-index.ts"
   },
   "dependencies": {
     "@schedulai/config": "*",

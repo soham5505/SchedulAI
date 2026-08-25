@@ -178,6 +178,26 @@ export const CreateSemesterSchema = z.object({
 export const UpdateSemesterSchema = CreateSemesterSchema.partial();
 
 // ==========================================
+// BATCH SCHEMAS
+// ==========================================
+
+export const CreateBatchSchema = z.object({
+  semesterId: MongoIdSchema,
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Batch code is required')
+    .max(20)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, 'Batch code may contain only letters, numbers, hyphens, and underscores')
+    .transform((value) => value.toUpperCase()),
+  studentCount: z.number().int().min(1).max(500).default(30),
+  isActive: z.boolean().default(true),
+});
+
+export const UpdateBatchSchema = CreateBatchSchema.omit({ semesterId: true }).partial();
+
+
+// ==========================================
 // TIME SLOT SCHEMAS
 // ==========================================
 
@@ -201,6 +221,8 @@ export const CreateTeachingAssignmentSchema = z.object({
   teacherId: MongoIdSchema,
   subjectId: MongoIdSchema,
   semesterId: MongoIdSchema,
+  batchId: MongoIdSchema.optional(),
+  classroomId: MongoIdSchema.optional(),
   classroomRequirements: z.array(z.string()).default([]),
   periodsPerWeek: z.number().int().min(1).max(20).default(4),
   isLab: z.boolean().default(false),
@@ -268,6 +290,7 @@ export const TimetableEntryUpdateSchema = z.object({
   classroomId: MongoIdSchema.optional(),
   timeSlotId: MongoIdSchema.optional(),
   periodType: PeriodTypeSchema.optional(),
+  batchId: MongoIdSchema.nullable().optional(),
 });
 
 // ==========================================
@@ -323,4 +346,8 @@ export const PaginationQuerySchema = z.object({
   order: z.enum(['asc', 'desc']).default('asc'),
   departmentId: MongoIdSchema.optional(),
   isActive: z.coerce.boolean().optional(),
+});
+
+export const BatchQuerySchema = PaginationQuerySchema.extend({
+  semesterId: MongoIdSchema.optional(),
 });

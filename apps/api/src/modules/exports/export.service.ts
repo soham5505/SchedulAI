@@ -4,6 +4,7 @@ import { SemesterModel } from '../../models/semester.model.js';
 import { TeacherModel } from '../../models/teacher.model.js';
 import { ClassroomModel } from '../../models/classroom.model.js';
 import { TimeSlotModel } from '../../models/timeslot.model.js';
+import { BatchModel } from '../../models/batch.model.js';
 import { ApiError } from '../../middleware/error.middleware.js';
 import { ERROR_CODES, DAYS_OF_WEEK } from '@schedulai/config';
 import { DayOfWeek } from '@schedulai/shared-types';
@@ -23,6 +24,7 @@ export class ExportService {
 
     const entries = await TimetableEntryModel.find(query)
       .populate('semesterId', 'name number section academicYear')
+      .populate('batchId', 'code')
       .populate('subjectId', 'name code credits isLab')
       .populate('teacherId', 'name email designation employeeId')
       .populate('classroomId', 'name building roomNumber capacity')
@@ -41,11 +43,13 @@ export class ExportService {
       const sub = e.subjectId as unknown as Record<string, unknown>;
       const tea = e.teacherId as unknown as Record<string, unknown>;
       const rm = e.classroomId as unknown as Record<string, unknown>;
+      const bat = e.batchId as unknown as Record<string, unknown>;
       return {
         Day: e.day,
         'Start Time': e.startTime,
         'End Time': e.endTime,
         Semester: sem ? `${sem.name} (${sem.section})` : '',
+        Batch: bat ? String(bat.code) : 'ALL',
         'Subject Code': sub ? String(sub.code) : '',
         'Subject Name': sub ? String(sub.name) : '',
         Faculty: tea ? String(tea.name) : '',
@@ -116,6 +120,7 @@ export class ExportService {
 
     const entries = await TimetableEntryModel.find(query)
       .populate('semesterId', 'name number section academicYear')
+      .populate('batchId', 'code')
       .populate('subjectId', 'name code credits isLab')
       .populate('teacherId', 'name email designation employeeId')
       .populate('classroomId', 'name building roomNumber capacity')
@@ -126,11 +131,13 @@ export class ExportService {
       const sub = e.subjectId as unknown as Record<string, unknown>;
       const tea = e.teacherId as unknown as Record<string, unknown>;
       const rm = e.classroomId as unknown as Record<string, unknown>;
+      const bat = e.batchId as unknown as Record<string, unknown>;
       return {
         Day: e.day,
         StartTime: e.startTime,
         EndTime: e.endTime,
         Semester: sem ? `${sem.name} (${sem.section})` : '',
+        Batch: bat ? String(bat.code) : 'ALL',
         SubjectCode: sub ? sub.code : '',
         SubjectName: sub ? sub.name : '',
         FacultyName: tea ? tea.name : '',

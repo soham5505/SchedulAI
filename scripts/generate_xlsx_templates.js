@@ -418,22 +418,23 @@ function timeslotInstructions() {
 }
 
 // 7. TEACHING ASSIGNMENTS
-// Model: TeachingAssignmentModel {teacherId, subjectId, semesterId, periodsPerWeek, isLab}
-// Unique index: {teacherId, subjectId, semesterId}
+// Model: TeachingAssignmentModel {teacherId, subjectId, semesterId, batchId, periodsPerWeek, isLab}
+// Unique index: {teacherId, subjectId, semesterId, batchId}
 // Import service:
 //   - teacherEmpId → TeacherModel.findOne({ employeeId: teacherEmpId })
 //   - subjectCode  → SubjectModel.findOne({ code: subjectCode })
 //   - semesterName → SemesterModel.findOne({ name: /$regex case-insensitive/ })
+//   - batchCode → BatchModel.findOne({ semesterId, code }) when supplied; blank or -- means whole class
 //   - periodsPerWeek → from columnMapping.weeklyPeriods
 //   - isLab → copied from subject.isLab automatically (NOT from Excel)
 function assignmentSheet() {
-    const headers = ['Teacher Employee ID', 'Subject Code', 'Semester Name', 'Weekly Periods'];
+    const headers = ['Teacher Employee ID', 'Subject Code', 'Semester Name', 'Batch Code', 'Weekly Periods', 'Location'];
     const rows = [
-        ['T001', 'DS', '3rd Semester - A', 4],
-        ['T002', 'DBMS', '3rd Semester - A', 4],
-        ['T003', 'CN', '5th Semester - A', 4],
-        ['T001', 'OS', '5th Semester - A', 4],
-        ['T004', 'PL', '3rd Semester - B', 3],
+        ['T001', 'DS', '3rd Semester - A', '--', 4, ''],
+        ['T002', 'DBMS', '3rd Semester - A', '--', 4, ''],
+        ['T003', 'CN', '5th Semester - A', 'BATCH_A', 4, 'Lab A'],
+        ['T001', 'OS', '5th Semester - A', '--', 4, ''],
+        ['T004', 'PL', '3rd Semester - B', '--', 3, ''],
     ];
     return makeSheet(headers, rows, [22, 16, 22, 16]);
 }
@@ -446,7 +447,7 @@ function assignmentInstructions() {
         'PURPOSE: Assigns teachers to subjects for specific semester batches.',
         '         This is the core input for AI timetable generation.',
         'IMPORT ORDER: Import LAST — depends on Teachers, Subjects, AND Semesters.',
-        'DUPLICATE RULE: Upsert on (Teacher + Subject + Semester).',
+        'DUPLICATE RULE: Upsert on (Teacher + Subject + Semester + Batch).',
         '',
         'COLUMN DETAILS:',
         '──────────────',
@@ -465,9 +466,15 @@ function assignmentInstructions() {
         '                    | Example: 3rd Semester - A',
         '                    | ⚠ Must match EXACTLY (minus casing) what is in the Semesters table',
         '',
+        'Batch Code          | Optional | Must match an EXISTING batch in that semester. Blank or -- means whole class (ALL)',
+        '                    | Auto-detected from: batch, batchcode, group, cohort',
+        '                    | Examples: BATCH_A, GROUP_2, ALL, --',
+        '',
         'Weekly Periods      | Optional | Number | Min 1, Max 20 | Default: 4',
         '                    | Auto-detected from: weeklyperiods, periods, periodsperweek, hours',
         '                    | = number of classes per week for this assignment',
+        '',
+        'Location            | Optional | If supplied, must match an existing classroom/location',
         '',
         'NOT IN EXCEL (set automatically by importer):',
         '• isLab → copied from the Subject record automatically',

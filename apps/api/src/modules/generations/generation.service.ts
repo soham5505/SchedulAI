@@ -7,6 +7,7 @@ import { SubjectModel } from '../../models/subject.model.js';
 import { ClassroomModel } from '../../models/classroom.model.js';
 import { TimeSlotModel } from '../../models/timeslot.model.js';
 import { TeachingAssignmentModel } from '../../models/assignment.model.js';
+import { BatchModel } from '../../models/batch.model.js';
 import { schedulerClient } from '../../utils/schedulerClient.js';
 import { ApiError } from '../../middleware/error.middleware.js';
 import { ERROR_CODES, DEFAULT_HARD_CONSTRAINTS, DEFAULT_SOFT_CONSTRAINTS } from '@schedulai/config';
@@ -44,7 +45,7 @@ export class GenerationService {
     );
 
     // 1. Fetch relevant academic data from MongoDB
-    const [semesters, classrooms, timeslots, assignments] = await Promise.all([
+    const [semesters, classrooms, timeslots, assignments, batches] = await Promise.all([
       SemesterModel.find({ _id: { $in: semesterObjectIds }, isActive: true }).lean(),
       ClassroomModel.find({ isAvailable: true }).lean(),
       TimeSlotModel.find({ isActive: true, isBreak: false }).lean(),
@@ -52,6 +53,7 @@ export class GenerationService {
         .populate('teacherId')
         .populate('subjectId')
         .lean(),
+      BatchModel.find({ semesterId: { $in: semesterObjectIds }, isActive: true }).lean(),
     ]);
 
     logger.info(`Found ${semesters.length} active semesters`);
@@ -143,6 +145,12 @@ export class GenerationService {
         name: `${m.name} (${m.section})`,
         studentCount: m.studentCount,
       })),
+      batches: batches.map((b) => ({
+        id: b._id.toString(),
+        semesterId: b.semesterId.toString(),
+        code: b.code,
+        studentCount: b.studentCount,
+      })),
       timeslots: timeslots.map((ts) => ({
         id: ts._id.toString(),
         day: ts.day as DayOfWeek,
@@ -153,8 +161,7 @@ export class GenerationService {
         isActive: ts.isActive,
       })),
       teachingAssignments: (() => {
-        // Deduplicate assignments by (teacherId, subjectId, semesterId)
-        // Keep the first occurrence only to avoid batch duplication issues
+        // Deduplicate only exact scheduling identities; batch rows are distinct assignments.
         const seen = new Set<string>();
         const deduplicated = assignments
           .map((a) => {
@@ -165,10 +172,12 @@ export class GenerationService {
               teacherId: String(tObj._id),
               subjectId: String(sObj._id),
               semesterId: a.semesterId.toString(),
+              ...(a.batchId ? { batchId: a.batchId.toString() } : {}),
+              ...(a.classroomId ? { classroomId: a.classroomId.toString() } : {}),
               classroomRequirements: a.classroomRequirements || [],
               periodsPerWeek: a.periodsPerWeek,
               isLab: a.isLab || false,
-              key: `${String(tObj._id)}|${String(sObj._id)}|${a.semesterId.toString()}`,
+              key: `${String(tObj._id)}|${String(sObj._id)}|${a.semesterId.toString()}|${a.batchId?.toString() || 'ALL'}`,
             };
           })
           .filter((a) => {
@@ -200,6 +209,7 @@ export class GenerationService {
         // Save Timetable Entries into MongoDB
         const entriesToInsert = solverResult.timetable.map((entry) => ({
           semesterId: new mongoose.Types.ObjectId(entry.semesterId),
+          ...(entry.batchId ? { batchId: new mongoose.Types.ObjectId(entry.batchId) } : {}),
           subjectId: new mongoose.Types.ObjectId(entry.subjectId),
           teacherId: new mongoose.Types.ObjectId(entry.teacherId),
           classroomId: new mongoose.Types.ObjectId(entry.classroomId),

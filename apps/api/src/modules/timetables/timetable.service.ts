@@ -6,6 +6,7 @@ import { TeacherModel } from '../../models/teacher.model.js';
 import { SubjectModel } from '../../models/subject.model.js';
 import { SemesterModel } from '../../models/semester.model.js';
 import { TeachingAssignmentModel } from '../../models/assignment.model.js';
+import { BatchModel } from '../../models/batch.model.js';
 import { schedulerClient } from '../../utils/schedulerClient.js';
 import { ApiError } from '../../middleware/error.middleware.js';
 import { ERROR_CODES } from '@schedulai/config';
@@ -45,6 +46,7 @@ export class TimetableService {
 
     const entries = await TimetableEntryModel.find(query)
       .populate('semesterId', 'name number section academicYear studentCount')
+      .populate('batchId', 'code studentCount isActive semesterId')
       .populate('subjectId', 'name code credits isLab')
       .populate('teacherId', 'name email designation employeeId')
       .populate('classroomId', 'name building roomNumber capacity type isLab')
@@ -73,13 +75,14 @@ export class TimetableService {
 
     // Fetch all current entries for this generation to validate
     const allGenEntries = await TimetableEntryModel.find({ generationId: entry.generationId }).lean();
-    const [teachers, subjects, classrooms, semesters, timeslots, assignments] = await Promise.all([
+    const [teachers, subjects, classrooms, semesters, timeslots, assignments, batches] = await Promise.all([
       TeacherModel.find({}).lean(),
       SubjectModel.find({}).lean(),
       ClassroomModel.find({}).lean(),
       SemesterModel.find({}).lean(),
       TimeSlotModel.find({ isActive: true, isBreak: false }).lean(),
       TeachingAssignmentModel.find({}).lean(),
+      BatchModel.find({ isActive: true }).lean(),
     ]);
 
     const suggestPayload: IProposedMoveRequest = {
@@ -100,6 +103,7 @@ export class TimetableService {
         generationId: e.generationId.toString(),
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
+        ...(e.batchId ? { batchId: e.batchId.toString() } : {}),
       })),
       teachers: teachers.map((t) => ({
         id: t._id.toString(),
@@ -133,6 +137,12 @@ export class TimetableService {
         name: `${m.name} (${m.section})`,
         studentCount: m.studentCount,
       })),
+      batches: batches.map((b) => ({
+        id: b._id.toString(),
+        semesterId: b.semesterId.toString(),
+        code: b.code,
+        studentCount: b.studentCount,
+      })),
       timeslots: timeslots.map((ts) => ({
         id: ts._id.toString(),
         day: ts.day,
@@ -148,7 +158,6 @@ export class TimetableService {
     const validationResult = await schedulerClient.suggest(suggestPayload);
 
     if (!validationResult.valid) {
-      logger.warn(`Proposed move for entry ${data.entryId} has ${validationResult.conflicts.length} conflict(s).`);
       return {
         success: false,
         valid: false,
@@ -190,18 +199,20 @@ export class TimetableService {
       throw new ApiError('No timetable entries found for this generation', 404, ERROR_CODES.TIMETABLE_NOT_FOUND);
     }
 
-    const [teachers, subjects, classrooms, semesters, timeslots, assignments] = await Promise.all([
+    const [teachers, subjects, classrooms, semesters, timeslots, assignments, batches] = await Promise.all([
       TeacherModel.find({}).lean(),
       SubjectModel.find({}).lean(),
       ClassroomModel.find({}).lean(),
       SemesterModel.find({}).lean(),
       TimeSlotModel.find({}).lean(),
       TeachingAssignmentModel.find({}).lean(),
+      BatchModel.find({ isActive: true }).lean(),
     ]);
 
     const reqPayload: IValidateTimetableRequest = {
       timetable: entries.map((e) => ({
         semesterId: e.semesterId.toString(),
+        ...(e.batchId ? { batchId: e.batchId.toString() } : {}),
         subjectId: e.subjectId.toString(),
         teacherId: e.teacherId.toString(),
         classroomId: e.classroomId.toString(),
@@ -243,6 +254,12 @@ export class TimetableService {
         name: `${m.name} (${m.section})`,
         studentCount: m.studentCount,
       })),
+      batches: batches.map((b) => ({
+        id: b._id.toString(),
+        semesterId: b.semesterId.toString(),
+        code: b.code,
+        studentCount: b.studentCount,
+      })),
       timeslots: timeslots.map((ts) => ({
         id: ts._id.toString(),
         day: ts.day,
@@ -260,6 +277,8 @@ export class TimetableService {
         classroomRequirements: a.classroomRequirements || [],
         periodsPerWeek: a.periodsPerWeek,
         isLab: a.isLab || false,
+        ...(a.batchId ? { batchId: a.batchId.toString() } : {}),
+        ...(a.classroomId ? { classroomId: a.classroomId.toString() } : {}),
       })),
     };
 
@@ -270,6 +289,12 @@ export class TimetableService {
     const entry = await TimetableEntryModel.findById(id);
     if (!entry) {
       throw new ApiError('Timetable entry not found', 404, ERROR_CODES.TIMETABLE_NOT_FOUND);
+    }
+    if (data.batchId !== undefined && data.batchId !== null) {
+      const batch = await BatchModel.findOne({ _id: data.batchId, semesterId: entry.semesterId }).lean();
+      if (!batch) {
+        throw new ApiError('Batch does not exist or does not belong to this semester', 400, ERROR_CODES.BAD_REQUEST);
+      }
     }
     Object.assign(entry, data);
     await entry.save();

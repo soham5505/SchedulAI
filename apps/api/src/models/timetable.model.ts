@@ -4,6 +4,7 @@ import { DayOfWeek, PeriodType } from '@schedulai/shared-types';
 export interface ITimetableEntryDocument extends Document {
   _id: mongoose.Types.ObjectId;
   semesterId: mongoose.Types.ObjectId;
+  batchId?: mongoose.Types.ObjectId;
   subjectId: mongoose.Types.ObjectId;
   teacherId: mongoose.Types.ObjectId;
   classroomId: mongoose.Types.ObjectId;
@@ -23,6 +24,12 @@ const TimetableEntrySchema = new Schema<ITimetableEntryDocument>(
       type: Schema.Types.ObjectId,
       ref: 'Semester',
       required: [true, 'Semester is required'],
+      index: true,
+    },
+    batchId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Batch',
+      default: null,
       index: true,
     },
     subjectId: {

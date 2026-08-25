@@ -120,6 +120,16 @@ export interface ISemester {
   updatedAt: string | Date;
 }
 
+export interface IBatch {
+  _id: string;
+  semesterId: string | ISemester;
+  code: string;
+  studentCount: number;
+  isActive: boolean;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
 export interface ITimeSlot {
   _id: string;
   day: DayOfWeek;
@@ -136,6 +146,8 @@ export interface ITeachingAssignment {
   teacherId: string | ITeacher;
   subjectId: string | ISubject;
   semesterId: string | ISemester;
+  batchId?: string | IBatch | null;
+  classroomId?: string | IClassroom | null;
   classroomRequirements: string[];
   periodsPerWeek: number;
   isLab: boolean;
@@ -146,6 +158,7 @@ export interface ITeachingAssignment {
 export interface ITimetableEntry {
   _id: string;
   semesterId: string | ISemester;
+  batchId?: string | IBatch | null;
   subjectId: string | ISubject;
   teacherId: string | ITeacher;
   classroomId: string | IClassroom;
@@ -301,9 +314,18 @@ export interface ISchedulerAssignmentInput {
   teacherId: string;
   subjectId: string;
   semesterId: string;
+  batchId?: string;
+  classroomId?: string;
   classroomRequirements: string[];
   periodsPerWeek: number;
   isLab: boolean;
+}
+
+export interface ISchedulerBatchInput {
+  id: string;
+  semesterId: string;
+  code: string;
+  studentCount: number;
 }
 
 export interface ISchedulerInput {
@@ -311,6 +333,7 @@ export interface ISchedulerInput {
   subjects: ISchedulerSubjectInput[];
   classrooms: ISchedulerClassroomInput[];
   semesters: ISchedulerSemesterInput[];
+  batches?: ISchedulerBatchInput[];
   timeslots: ISchedulerTimeSlotInput[];
   teachingAssignments: ISchedulerAssignmentInput[];
   hardConstraints?: Partial<IHardConstraints>;
@@ -321,6 +344,7 @@ export interface ISchedulerInput {
 
 export interface ISchedulerEntryOutput {
   semesterId: string;
+  batchId?: string;
   subjectId: string;
   teacherId: string;
   classroomId: string;
@@ -363,6 +387,7 @@ export interface IValidateTimetableRequest {
   subjects: ISchedulerSubjectInput[];
   classrooms: ISchedulerClassroomInput[];
   semesters: ISchedulerSemesterInput[];
+  batches?: ISchedulerBatchInput[];
   timeslots: ISchedulerTimeSlotInput[];
   teachingAssignments: ISchedulerAssignmentInput[];
 }
@@ -385,6 +410,7 @@ export interface IProposedMoveRequest {
   subjects: ISchedulerSubjectInput[];
   classrooms: ISchedulerClassroomInput[];
   semesters: ISchedulerSemesterInput[];
+  batches?: ISchedulerBatchInput[];
   timeslots: ISchedulerTimeSlotInput[];
 }
 

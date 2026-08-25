@@ -67,6 +67,13 @@ class SemesterInput(BaseModel):
     studentCount: int = Field(default=30, ge=1)
 
 
+class BatchInput(BaseModel):
+    id: str
+    semesterId: str
+    code: str
+    studentCount: int = Field(default=30, ge=1)
+
+
 class TimeSlotInput(BaseModel):
     id: str
     day: DayOfWeek
@@ -83,6 +90,8 @@ class AssignmentInput(BaseModel):
     teacherId: str
     subjectId: str
     semesterId: str
+    batchId: Optional[str] = None
+    classroomId: Optional[str] = None
     classroomRequirements: List[str] = Field(default_factory=list)
     periodsPerWeek: int = Field(default=4, ge=1, le=20)
     isLab: bool = False
@@ -118,6 +127,7 @@ class GenerateRequest(BaseModel):
     subjects: List[SubjectInput]
     classrooms: List[ClassroomInput]
     semesters: List[SemesterInput]
+    batches: List[BatchInput] = Field(default_factory=list)
     timeslots: List[TimeSlotInput]
     teachingAssignments: List[AssignmentInput]
     hardConstraints: Optional[HardConstraintsInput] = Field(default_factory=HardConstraintsInput)
@@ -129,6 +139,7 @@ class GenerateRequest(BaseModel):
 class ExistingTimetableEntryInput(BaseModel):
     id: Optional[str] = None
     semesterId: str
+    batchId: Optional[str] = None
     subjectId: str
     teacherId: str
     classroomId: str
@@ -145,6 +156,7 @@ class ValidateRequest(BaseModel):
     subjects: List[SubjectInput]
     classrooms: List[ClassroomInput]
     semesters: List[SemesterInput]
+    batches: List[BatchInput] = Field(default_factory=list)
     timeslots: List[TimeSlotInput]
     teachingAssignments: List[AssignmentInput]
 
@@ -158,5 +170,6 @@ class SuggestRequest(BaseModel):
     subjects: List[SubjectInput]
     classrooms: List[ClassroomInput]
     semesters: List[SemesterInput]
+    batches: List[BatchInput] = Field(default_factory=list)
     timeslots: List[TimeSlotInput]
     teachingAssignments: List[AssignmentInput]

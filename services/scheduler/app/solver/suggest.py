@@ -59,6 +59,7 @@ class SlotSuggester:
         proposed_entry = ExistingTimetableEntryInput(
             id=target_entry.id,
             semesterId=target_entry.semesterId,
+            batchId=target_entry.batchId,
             subjectId=target_entry.subjectId,
             teacherId=target_entry.teacherId,
             classroomId=target_room_id,
@@ -77,6 +78,7 @@ class SlotSuggester:
                 subjects=list(self.subjects.values()),
                 classrooms=list(self.classrooms.values()),
                 semesters=list(self.semesters.values()),
+                    batches=list(self.request.batches),
                 timeslots=list(self.timeslots.values()),
                 teachingAssignments=self.assignments,
             )
@@ -95,12 +97,12 @@ class SlotSuggester:
 
         # Find all busy slots for this teacher, semester, and classrooms in remaining_entries
         busy_teachers: Dict[Tuple[str, str], bool] = {}
-        busy_semesters: Dict[Tuple[str, str], bool] = {}
+        busy_semesters: Dict[Tuple[str, str], List[ExistingTimetableEntryInput]] = {}
         busy_classrooms: Dict[Tuple[str, str], bool] = {}
 
         for entry in remaining_entries:
             busy_teachers[(entry.teacherId, entry.timeSlotId)] = True
-            busy_semesters[(entry.semesterId, entry.timeSlotId)] = True
+            busy_semesters.setdefault((entry.semesterId, entry.timeSlotId), []).append(entry)
             busy_classrooms[(entry.classroomId, entry.timeSlotId)] = True
 
         for ts_id, ts in self.timeslots.items():
@@ -118,7 +120,13 @@ class SlotSuggester:
 
             # 2. Semester availability
             if semester:
-                if (semester.id, ts_id) in busy_semesters:
+                same_scope = busy_semesters.get((semester.id, ts_id), [])
+                if any(
+                    not target_entry.batchId
+                    or not entry.batchId
+                    or target_entry.batchId == entry.batchId
+                    for entry in same_scope
+                ):
                     continue
 
             # 3. Compatible classrooms
@@ -127,7 +135,9 @@ class SlotSuggester:
                     continue
                 if (c_id, ts_id) in busy_classrooms:
                     continue
-                if semester and classroom.capacity < semester.studentCount:
+                batch = next((b for b in self.request.batches if b.id == target_entry.batchId), None)
+                student_count = batch.studentCount if batch else semester.studentCount if semester else 0
+                if student_count and classroom.capacity < student_count:
                     continue
                 if subject and (subject.isLab or target_entry.periodType == "LAB") and not classroom.isLab:
                     continue
