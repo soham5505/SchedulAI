@@ -36,6 +36,7 @@ class TeacherInput(BaseModel):
     unavailableTimeSlots: List[str] = Field(default_factory=list)
     maxClassesPerDay: int = Field(default=4, ge=1, le=10)
     maxClassesPerWeek: int = Field(default=20, ge=1, le=40)
+    isMaxWeeklySourceDefined: bool = Field(default=False, description="True if maxClassesPerWeek comes from source data, False if it's a default value")
 
 
 class SubjectInput(BaseModel):

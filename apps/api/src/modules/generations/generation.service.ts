@@ -36,17 +36,26 @@ export interface GenerateDTO {
 export class GenerationService {
   async generate(data: GenerateDTO, user: IUser) {
     logger.info(`Starting timetable generation '${data.name}' for ${data.semesterIds.length} semester(s)`);
+    logger.info(`Semester IDs received: ${data.semesterIds.join(', ')}`);
+
+    // Convert string IDs to MongoDB ObjectIds
+    const semesterObjectIds = data.semesterIds.map((id) =>
+      typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id
+    );
 
     // 1. Fetch relevant academic data from MongoDB
     const [semesters, classrooms, timeslots, assignments] = await Promise.all([
-      SemesterModel.find({ _id: { $in: data.semesterIds }, isActive: true }).lean(),
+      SemesterModel.find({ _id: { $in: semesterObjectIds }, isActive: true }).lean(),
       ClassroomModel.find({ isAvailable: true }).lean(),
       TimeSlotModel.find({ isActive: true, isBreak: false }).lean(),
-      TeachingAssignmentModel.find({ semesterId: { $in: data.semesterIds } })
+      TeachingAssignmentModel.find({ semesterId: { $in: semesterObjectIds } })
         .populate('teacherId')
         .populate('subjectId')
         .lean(),
     ]);
+
+    logger.info(`Found ${semesters.length} active semesters`);
+    logger.info(`Found ${assignments.length} teaching assignments`);
 
     if (semesters.length === 0) {
       throw new ApiError('No active semesters found for the selected IDs', 400, ERROR_CODES.BAD_REQUEST);
@@ -109,6 +118,7 @@ export class GenerationService {
         unavailableTimeSlots: ((t.unavailableTimeSlots as Array<unknown>) || []).map((id) => String(id)),
         maxClassesPerDay: Number(t.maxClassesPerDay) || 4,
         maxClassesPerWeek: Number(t.maxClassesPerWeek) || 20,
+        isMaxWeeklySourceDefined: false, // By default, treat as not source-defined (from import/allocations)
       })),
       subjects: subjects.map((s) => ({
         id: String(s._id),
@@ -142,19 +152,41 @@ export class GenerationService {
         isBreak: ts.isBreak,
         isActive: ts.isActive,
       })),
-      teachingAssignments: assignments.map((a) => {
-        const tObj = a.teacherId as unknown as Record<string, unknown>;
-        const sObj = a.subjectId as unknown as Record<string, unknown>;
-        return {
-          id: a._id.toString(),
-          teacherId: String(tObj._id),
-          subjectId: String(sObj._id),
-          semesterId: a.semesterId.toString(),
-          classroomRequirements: a.classroomRequirements || [],
-          periodsPerWeek: a.periodsPerWeek,
-          isLab: a.isLab || false,
-        };
-      }),
+      teachingAssignments: (() => {
+        // Deduplicate assignments by (teacherId, subjectId, semesterId)
+        // Keep the first occurrence only to avoid batch duplication issues
+        const seen = new Set<string>();
+        const deduplicated = assignments
+          .map((a) => {
+            const tObj = a.teacherId as unknown as Record<string, unknown>;
+            const sObj = a.subjectId as unknown as Record<string, unknown>;
+            return {
+              id: a._id.toString(),
+              teacherId: String(tObj._id),
+              subjectId: String(sObj._id),
+              semesterId: a.semesterId.toString(),
+              classroomRequirements: a.classroomRequirements || [],
+              periodsPerWeek: a.periodsPerWeek,
+              isLab: a.isLab || false,
+              key: `${String(tObj._id)}|${String(sObj._id)}|${a.semesterId.toString()}`,
+            };
+          })
+          .filter((a) => {
+            if (seen.has(a.key)) {
+              logger.warn(`Deduplication: Skipping duplicate assignment ${a.id} (teacher: ${a.teacherId}, subject: ${a.subjectId}, semester: ${a.semesterId})`);
+              return false;
+            }
+            seen.add(a.key);
+            return true;
+          })
+          .map(({ key, ...rest }) => rest);
+
+        if (deduplicated.length < assignments.length) {
+          logger.info(`Assignment deduplication: Reduced from ${assignments.length} to ${deduplicated.length} (removed ${assignments.length - deduplicated.length} duplicates)`);
+        }
+        
+        return deduplicated;
+      })(),
       hardConstraints: { ...DEFAULT_HARD_CONSTRAINTS, ...(data.hardConstraints || {}) },
       softConstraints: { ...DEFAULT_SOFT_CONSTRAINTS, ...(data.softConstraints || {}) },
       timeLimitSeconds: data.timeLimitSeconds || 60,

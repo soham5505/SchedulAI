@@ -105,7 +105,20 @@ export const ImportPage: React.FC = () => {
     },
     onSuccess: (job) => {
       if (job) {
-        toast.success(`Import complete! ${job.successRows} rows inserted, ${job.errorRows} errors.`);
+        if (job.successRows === 0 && job.errorRows > 0) {
+          // All rows failed — show actionable error
+          const firstErr = (job as any).rowErrors?.[0];
+          const hint = firstErr ? ` First error: ${firstErr.message}` : '';
+          toast.error(
+            `All ${job.errorRows} rows failed — check your column mappings and that referenced Teachers, Subjects, and Semesters exist.${hint}`,
+            'Import Failed'
+          );
+        } else {
+          toast.success(
+            `Import complete! ${job.successRows} rows inserted${job.errorRows > 0 ? `, ${job.errorRows} rows had errors (see Import History for details)` : ''
+            }.`
+          );
+        }
         setParseResult(null);
         setFile(null);
         setActiveTab('HISTORY');
@@ -261,6 +274,7 @@ export const ImportPage: React.FC = () => {
                   { value: 'CLASSROOMS', label: 'Classrooms & Labs' },
                   { value: 'SEMESTERS', label: 'Semesters & Student Batches' },
                   { value: 'ASSIGNMENTS', label: 'Teaching Assignments' },
+                  { value: 'TIMESLOTS', label: 'Time Slots' },
                 ]}
               />
 

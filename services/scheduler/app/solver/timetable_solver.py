@@ -52,8 +52,101 @@ class TimetableSolver:
         for ts in self.sorted_timeslots:
             self.timeslots_by_day.setdefault(ts.day, []).append(ts)
 
+    def _print_diagnostics(self) -> None:
+        """Print diagnostic information about semester and faculty workload."""
+        print("\n" + "="*80)
+        print("SCHEDULER DIAGNOSTICS")
+        print("="*80)
+        
+        # Semester workload analysis
+        print("\nSEMESTER WORKLOAD ANALYSIS:")
+        print("-" * 80)
+        
+        sem_workload: Dict[str, Dict[str, Any]] = {}
+        for a in self.assignments:
+            if a.semesterId not in sem_workload:
+                sem_workload[a.semesterId] = {
+                    'theory_periods': 0,
+                    'lab_periods': 0,
+                    'total_periods': 0,
+                    'assignment_count': 0,
+                    'unique_courses': set()
+                }
+            
+            subject = self.subjects.get(a.subjectId)
+            is_lab = a.isLab or (subject and subject.isLab)
+            
+            sem_workload[a.semesterId]['total_periods'] += a.periodsPerWeek
+            sem_workload[a.semesterId]['assignment_count'] += 1
+            if subject:
+                sem_workload[a.semesterId]['unique_courses'].add(subject.code)
+            
+            # Try to infer whether this is theory or lab based on subject flag
+            if is_lab:
+                sem_workload[a.semesterId]['lab_periods'] += a.periodsPerWeek
+            else:
+                sem_workload[a.semesterId]['theory_periods'] += a.periodsPerWeek
+        
+        for sem_id, workload in sem_workload.items():
+            semester = self.semesters.get(sem_id)
+            sem_name = semester.name if semester else sem_id
+            print(f"\nSemester: {sem_name}")
+            print(f"  Unique Courses: {len(workload['unique_courses'])}")
+            print(f"  Theory Weekly Periods: {workload['theory_periods']}")
+            print(f"  Lab Weekly Periods: {workload['lab_periods']}")
+            print(f"  Total Weekly Periods Required: {workload['total_periods']}")
+            print(f"  Total Assignments: {workload['assignment_count']}")
+            print(f"  Active Time Slots Available: {len(self.timeslots)}")
+            
+            if workload['total_periods'] > len(self.timeslots):
+                print(f"  ⚠️  WARNING: Total demand ({workload['total_periods']}) exceeds available slots ({len(self.timeslots)})")
+        
+        # Faculty workload analysis
+        print("\n\nFACULTY WORKLOAD ANALYSIS:")
+        print("-" * 80)
+        
+        teacher_workload: Dict[str, Dict[str, Any]] = {}
+        for a in self.assignments:
+            if a.teacherId not in teacher_workload:
+                teacher_workload[a.teacherId] = {
+                    'allocated_periods': 0,
+                    'assignment_count': 0,
+                    'subjects': []
+                }
+            
+            teacher_workload[a.teacherId]['allocated_periods'] += a.periodsPerWeek
+            teacher_workload[a.teacherId]['assignment_count'] += 1
+            
+            subject = self.subjects.get(a.subjectId)
+            if subject:
+                teacher_workload[a.teacherId]['subjects'].append(f"{subject.code} ({a.periodsPerWeek})")
+        
+        for teacher_id, workload in teacher_workload.items():
+            teacher = self.teachers.get(teacher_id)
+            teacher_name = teacher.name if teacher else teacher_id
+            print(f"\nFaculty: {teacher_name}")
+            print(f"  Allocated Weekly Periods: {workload['allocated_periods']}")
+            print(f"  Configured Max Weekly Periods: {teacher.maxClassesPerWeek if teacher else 'N/A'}")
+            is_source_defined = getattr(teacher, 'isMaxWeeklySourceDefined', True) if teacher else False
+            max_source = "source-defined" if is_source_defined else "UI default (not from source data)"
+            print(f"  Max Weekly Periods Source: {max_source}")
+            print(f"  Total Assignments: {workload['assignment_count']}")
+            print(f"  Subjects: {', '.join(workload['subjects'])}")
+            
+            if teacher and workload['allocated_periods'] > teacher.maxClassesPerWeek:
+                if is_source_defined:
+                    print(f"  ⚠️  WARNING: Allocated ({workload['allocated_periods']}) exceeds source-defined max ({teacher.maxClassesPerWeek})")
+                else:
+                    print(f"  ℹ️  INFO: Allocated ({workload['allocated_periods']}) exceeds UI default max ({teacher.maxClassesPerWeek}), but max is not source-defined so constraint will be disabled")
+        
+        print("\nActive Time Slots: " + str(len(self.timeslots)))
+        print("="*80 + "\n")
+
     def solve(self) -> GenerateResponse:
         start_time = time.time()
+
+        # Step -1: Print diagnostic information
+        self._print_diagnostics()
 
         # Step 0: Quick feasibility pre-checks
         precheck_violations = self._precheck_feasibility()
@@ -226,17 +319,18 @@ class TimetableSolver:
                     if day_vars:
                         model.Add(sum(day_vars) <= teacher.maxClassesPerDay)
 
-                # Weekly limit
-                all_teacher_vars = []
-                for a in self.assignments:
-                    if a.teacherId == teacher.id:
-                        for k in range(a.periodsPerWeek):
-                            for ts in self.sorted_timeslots:
-                                for c in self.classrooms.values():
-                                    if (a.id, k, ts.id, c.id) in x:
-                                        all_teacher_vars.append(x[(a.id, k, ts.id, c.id)])
-                if all_teacher_vars:
-                    model.Add(sum(all_teacher_vars) <= teacher.maxClassesPerWeek)
+                # Weekly limit - only enforce if source data explicitly defined it
+                if getattr(teacher, 'isMaxWeeklySourceDefined', True):  # Default to True for backwards compatibility
+                    all_teacher_vars = []
+                    for a in self.assignments:
+                        if a.teacherId == teacher.id:
+                            for k in range(a.periodsPerWeek):
+                                for ts in self.sorted_timeslots:
+                                    for c in self.classrooms.values():
+                                        if (a.id, k, ts.id, c.id) in x:
+                                            all_teacher_vars.append(x[(a.id, k, ts.id, c.id)])
+                    if all_teacher_vars:
+                        model.Add(sum(all_teacher_vars) <= teacher.maxClassesPerWeek)
 
         # 3. Soft Constraints / Objective
         objective_terms = []
@@ -424,7 +518,9 @@ class TimetableSolver:
                     entityId=t_id,
                     details={"assigned": demand, "available": available_slots_for_teacher}
                 ))
-            if demand > teacher.maxClassesPerWeek:
+            # Only check weekly limit if source data defines it
+            is_source_defined = getattr(teacher, 'isMaxWeeklySourceDefined', True)  # Default to True for backwards compatibility
+            if is_source_defined and demand > teacher.maxClassesPerWeek:
                 violations.append(ViolationOutput(
                     type="TEACHER_WEEKLY_LIMIT_EXCEEDED",
                     severity="ERROR",

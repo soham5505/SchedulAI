@@ -41,7 +41,7 @@ export class ImportService {
       const patterns: Record<string, string[]> = {
         name: ['name', 'fullname', 'teachername', 'facultyname', 'subjectname', 'roomname', 'semestername'],
         email: ['email', 'emailaddress', 'mail'],
-        employeeId: ['employeeid', 'empid', 'facultyid', 'id'],
+        employeeId: ['employeeid', 'empid', 'facultyid', 'teacheremployeeid', 'id'],
         code: ['code', 'subjectcode', 'deptcode', 'coursecode'],
         credits: ['credits', 'credit', 'creditpoints'],
         weeklyPeriods: ['weeklyperiods', 'periods', 'periodsperweek', 'hours'],
@@ -111,6 +111,41 @@ export class ImportService {
     const defaultDeptId = departmentId
       ? new mongoose.Types.ObjectId(departmentId)
       : departments[0]?._id;
+
+    // Track processed teaching assignments to detect and consolidate batch identifiers
+    // Key: "${teacherId}|${baseCourseCode}|${semesterId}" (without batch suffix)
+    const processedAssignments = new Map<string, { teacherId: string; subjectId: string; semesterId: string; periodsPerWeek: number; rowNumber: number }>();
+    const batchConsolidationLog: Array<{ row: number; message: string }> = [];
+
+    // Helper function to extract base course code (remove batch identifiers like B1-B4, W1-W4, D1-D2)
+    // Also checks other fields in the row for batch indicators
+    const getBaseCourseCode = (code: string, row?: Record<string, unknown>): { baseCourseCode: string; hasBatchIndicator: boolean } => {
+      // First, remove batch patterns from the code itself
+      let baseCourseCode = code
+        .replace(/\s*[BWD]\d(?:-[BWD]?\d+)?$/i, '') // Matches B1-B4, W1-W4, D1-D2 at end
+        .replace(/\s*\([BWD]\d(?:-[BWD]?\d+)?\)\s*$/i, '') // Matches (B1-B4) at end
+        .trim();
+      
+      const codeHasBatch = baseCourseCode !== code;
+      
+      // Also check for batch indicators in other row fields
+      let rowHasBatchField = false;
+      if (row) {
+        const rowValues = Object.values(row)
+          .map(v => String(v || '').trim().toUpperCase())
+          .join(' ');
+        
+        // Check for common batch patterns in row data
+        if (/\b(B[1-4]|W[1-4]|D[1-2]|BATCH|SECTION|GROUP|COHORT)\b/.test(rowValues)) {
+          rowHasBatchField = true;
+        }
+      }
+      
+      return {
+        baseCourseCode,
+        hasBatchIndicator: codeHasBatch || rowHasBatchField
+      };
+    };
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -233,35 +268,112 @@ export class ImportService {
           const semesterName = String(row[columnMapping.name || 'name'] || '').trim();
           const periodsPerWeek = Number(row[columnMapping.weeklyPeriods || 'weeklyPeriods']) || 4;
 
-          const teacher = await TeacherModel.findOne({
-            $or: [{ employeeId: teacherEmpId }, { email: teacherEmail }],
-          });
-          if (!teacher) throw new Error(`Teacher with ID/Email '${teacherEmpId || teacherEmail}' not found`);
+          // Validate required fields before hitting DB
+          if (!teacherEmpId && !teacherEmail)
+            throw new Error(`Row ${rowNumber}: Teacher Employee ID is missing — check the column mapping for 'Teacher Employee ID'`);
+          if (!subjectCode)
+            throw new Error(`Row ${rowNumber}: Subject Code is missing — check the column mapping for 'Subject Code'`);
+          if (!semesterName)
+            throw new Error(`Row ${rowNumber}: Semester Name is missing — check the column mapping for 'Semester Name'`);
+
+          const teacher = await TeacherModel.findOne(
+            teacherEmpId
+              ? { employeeId: teacherEmpId }
+              : { email: teacherEmail }
+          );
+          if (!teacher)
+            throw new Error(`Row ${rowNumber}: Teacher with Employee ID '${teacherEmpId || teacherEmail}' not found in the database`);
 
           const subject = await SubjectModel.findOne({ code: subjectCode });
-          if (!subject) throw new Error(`Subject with code '${subjectCode}' not found`);
+          if (!subject)
+            throw new Error(`Row ${rowNumber}: Subject with code '${subjectCode}' not found in the database`);
 
-          const semester = await SemesterModel.findOne({ name: semesterName });
-          if (!semester) throw new Error(`Semester '${semesterName}' not found`);
+          // Case-insensitive, trim-safe semester lookup
+          const escapedName = semesterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const semester = await SemesterModel.findOne({
+            name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
+          });
+          if (!semester)
+            throw new Error(`Row ${rowNumber}: Semester '${semesterName}' not found — ensure it exists in the Semesters & Batches table`);
 
-          await TeachingAssignmentModel.findOneAndUpdate(
-            { teacherId: teacher._id, subjectId: subject._id, semesterId: semester._id },
-            {
-              teacherId: teacher._id,
-              subjectId: subject._id,
-              semesterId: semester._id,
+          // Detect batch identifier patterns in subject code and row data
+          const { baseCourseCode, hasBatchIndicator } = getBaseCourseCode(subjectCode, row);
+          
+          // Create deduplication key: treat all batch variants as the same assignment
+          const assignmentKey = `${teacher._id}|${baseCourseCode}|${semester._id}`;
+          
+          if (processedAssignments.has(assignmentKey)) {
+            // This is a duplicate batch assignment - log and skip
+            const existing = processedAssignments.get(assignmentKey)!;
+            if (hasBatchIndicator) {
+              batchConsolidationLog.push({
+                row: rowNumber,
+                message: `Batch variant of assignment (row ${existing.rowNumber}) detected and skipped. Using first occurrence only.`
+              });
+              successCount++; // Count as success but don't insert
+              logger.info(`Batch consolidation: Row ${rowNumber} skipped, using row ${existing.rowNumber} for ${baseCourseCode}`);
+            }
+          } else {
+            // First occurrence - process normally
+            await TeachingAssignmentModel.findOneAndUpdate(
+              { teacherId: teacher._id, subjectId: subject._id, semesterId: semester._id },
+              {
+                teacherId: teacher._id,
+                subjectId: subject._id,
+                semesterId: semester._id,
+                periodsPerWeek,
+                isLab: subject.isLab,
+              },
+              { upsert: true, new: true }
+            );
+            
+            // Track this assignment
+            processedAssignments.set(assignmentKey, {
+              teacherId: teacher._id.toString(),
+              subjectId: subject._id.toString(),
+              semesterId: semester._id.toString(),
               periodsPerWeek,
-              isLab: subject.isLab,
-            },
+              rowNumber
+            });
+            
+            if (hasBatchIndicator) {
+              logger.info(`Assignment processed with batch consolidation enabled for ${baseCourseCode} (row ${rowNumber})`);
+            }
+            
+            successCount++;
+          }
+        } else if (type === 'TIMESLOTS') {
+          const VALID_DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+          const day = String(row[columnMapping.day || 'day'] || '').trim().toUpperCase();
+          const startTime = String(row[columnMapping.startTime || 'startTime'] || '').trim();
+          const endTime = String(row[columnMapping.endTime || 'endTime'] || '').trim();
+          const periodNumber = Number(row[columnMapping.periodNumber || 'periodNumber']) || 0;
+          const isBreak = String(row[columnMapping.isBreak || 'isBreak'] || '').toLowerCase() === 'true';
+          const label = String(row[columnMapping.label || 'label'] || '').trim();
+
+          if (!day || !VALID_DAYS.includes(day))
+            throw new Error(`Row ${rowNumber}: Day '${day}' is invalid — must be one of: ${VALID_DAYS.join(', ')}`);
+          if (!startTime)
+            throw new Error(`Row ${rowNumber}: Start Time is required`);
+          if (!endTime)
+            throw new Error(`Row ${rowNumber}: End Time is required`);
+          if (!periodNumber || periodNumber < 1)
+            throw new Error(`Row ${rowNumber}: Period Number must be a positive integer`);
+
+          await TimeSlotModel.findOneAndUpdate(
+            { day, startTime, endTime },
+            { day, startTime, endTime, periodNumber, isBreak, label, isActive: true },
             { upsert: true, new: true }
           );
           successCount++;
         }
       } catch (err) {
+        const errMsg = (err as Error).message;
+        logger.warn(`Import row ${rowNumber} failed: ${errMsg}`);
         errors.push({
           row: rowNumber,
           field: 'general',
-          message: (err as Error).message,
+          message: errMsg,
           value: row,
         });
       }
@@ -275,6 +387,13 @@ export class ImportService {
     job.status = errors.length === rows.length ? 'FAILED' : 'COMPLETED';
     job.completedAt = new Date();
     await job.save();
+
+    if (type === 'ASSIGNMENTS' && batchConsolidationLog.length > 0) {
+      logger.info(`Batch consolidation: ${batchConsolidationLog.length} batch variants consolidated during import`);
+      for (const log of batchConsolidationLog) {
+        logger.info(`  Row ${log.row}: ${log.message}`);
+      }
+    }
 
     logger.info(`Import ${type} finished: ${successCount} successful, ${errors.length} errors.`);
 

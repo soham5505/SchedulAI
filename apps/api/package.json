@@ -9,7 +9,15 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "seed": "tsx src/scripts/seed.ts"
+    "seed": "tsx src/scripts/seed.ts",
+    "seed:dummy": "tsx src/scripts/seed-dummy-data.ts",
+    "verify:semesters": "tsx src/scripts/verify-semesters.ts",
+    "debug:generation": "tsx src/scripts/debug-generation.ts",
+    "adjust:periods": "tsx src/scripts/adjust-periods.ts",
+    "cleanup:batch-duplicates": "tsx src/scripts/cleanup-batch-duplicates.ts",
+    "cleanup:course-duplicates": "tsx src/scripts/cleanup-course-duplicates.ts",
+    "test:batch-detection": "tsx src/scripts/test-batch-detection.ts",
+    "diagnostic:assignments": "tsx src/scripts/diagnostic-assignments.ts"
   },
   "dependencies": {
     "@schedulai/config": "*",
