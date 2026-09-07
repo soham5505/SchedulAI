@@ -1,0 +1,901 @@
+{
+  "teachers": [],
+  "subjects": [
+    {
+      "id": "6a8dcc91fcb5807b1a4ead61",
+      "name": "Applied Mathematics Thinking",
+      "code": "2343111",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead62",
+      "name": "Advance Data Structure & Analysis",
+      "code": "2343112",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead63",
+      "name": "Database Management System & Application",
+      "code": "2343113",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead64",
+      "name": "Automata Theory",
+      "code": "2343114",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead65",
+      "name": "Open Elective-Web Designing with Word Press",
+      "code": "OEC301",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead66",
+      "name": "Mini Project- Full Stack Java Programming",
+      "code": "2343611",
+      "weeklyPeriods": 2,
+      "lecturePeriods": 2,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead67",
+      "name": "Entrepreneurship Development",
+      "code": "2993511",
+      "weeklyPeriods": 2,
+      "lecturePeriods": 2,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead68",
+      "name": "Environmental Science",
+      "code": "2993512",
+      "weeklyPeriods": 2,
+      "lecturePeriods": 2,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead6b",
+      "name": "Software Engineering and Agile Practices",
+      "code": "2345111",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead6c",
+      "name": "Artificial Intelligence and Machine Learning",
+      "code": "2345112",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead6d",
+      "name": "Web Technology",
+      "code": "2345113",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead6e",
+      "name": "PEC-1 Advanced Database Technologies",
+      "code": "23451142",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead6f",
+      "name": "Multidisciplinary Minor (Wireless & MComm)",
+      "code": "MDC501",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead70",
+      "name": "Open Elective - GENERATIVE AI",
+      "code": "OEC501",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead71",
+      "name": "India Knowledge System - 2",
+      "code": "2345511",
+      "weeklyPeriods": 2,
+      "lecturePeriods": 2,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead58",
+      "name": "AI and DS - II",
+      "code": "ITC701",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead59",
+      "name": "Internet of Everything",
+      "code": "ITC702",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead5a",
+      "name": "Department Optional Course - 3 : Infrastructure Security",
+      "code": "ITDO7013",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    },
+    {
+      "id": "6a8dcc91fcb5807b1a4ead5b",
+      "name": "Department Optional Course - 4 : Information Retrieval System",
+      "code": "ITDO7024",
+      "weeklyPeriods": 3,
+      "lecturePeriods": 3,
+      "labPeriods": 0,
+      "isLab": false
+    }
+  ],
+  "classrooms": [
+    {
+      "id": "6a8dd123fcb5807b1a4eada8",
+      "name": "IT Block - EN 2/12 (IT Block - EN 2/12)",
+      "capacity": 65,
+      "type": "LECTURE",
+      "equipment": [],
+      "isLab": false,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eada9",
+      "name": "IT Block - L & AB 0/3 (IT Block - L & AB 0/3)",
+      "capacity": 20,
+      "type": "LAB",
+      "equipment": [],
+      "isLab": true,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eadaa",
+      "name": "IT Block - L & AB 1/1 (IT Block - L & AB 1/1)",
+      "capacity": 20,
+      "type": "LAB",
+      "equipment": [],
+      "isLab": true,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eadab",
+      "name": "IT Block - L & AB 1/2 (IT Block - L & AB 1/2)",
+      "capacity": 20,
+      "type": "LAB",
+      "equipment": [],
+      "isLab": true,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eadac",
+      "name": "IT Block - L & AB 1/3 (IT Block - L & AB 1/3)",
+      "capacity": 20,
+      "type": "LAB",
+      "equipment": [],
+      "isLab": true,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eadad",
+      "name": "IT Block - L & AB 1/4 (IT Block - L & AB 1/4)",
+      "capacity": 20,
+      "type": "LAB",
+      "equipment": [],
+      "isLab": true,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eadae",
+      "name": "IT Block - L & AB 2/1 (IT Block - L & AB 2/1)",
+      "capacity": 20,
+      "type": "LAB",
+      "equipment": [],
+      "isLab": true,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eadaf",
+      "name": "IT Block - L & AB 2/2 (IT Block - L & AB 2/2)",
+      "capacity": 20,
+      "type": "LAB",
+      "equipment": [],
+      "isLab": true,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eadb0",
+      "name": "IT Block - L & AB 2/3 (IT Block - L & AB 2/3)",
+      "capacity": 20,
+      "type": "LAB",
+      "equipment": [],
+      "isLab": true,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eadb1",
+      "name": "IT Block - L & AB 2/4 (IT Block - L & AB 2/4)",
+      "capacity": 65,
+      "type": "LECTURE",
+      "equipment": [],
+      "isLab": false,
+      "isAvailable": true
+    },
+    {
+      "id": "6a8dd123fcb5807b1a4eadb2",
+      "name": "IT Block - PROJECT-ROOM (IT Block - PROJECT-ROOM)",
+      "capacity": 65,
+      "type": "SEMINAR",
+      "equipment": [],
+      "isLab": false,
+      "isAvailable": true
+    }
+  ],
+  "semesters": [
+    {
+      "id": "6a8dce19fcb5807b1a4ead81",
+      "name": "TEIT 3rd Semester (A)",
+      "studentCount": 65
+    },
+    {
+      "id": "6a8dce19fcb5807b1a4ead82",
+      "name": "TEIT 5th Semester (A)",
+      "studentCount": 65
+    },
+    {
+      "id": "6a8dce19fcb5807b1a4ead83",
+      "name": "TEIT 7th Semester (A)",
+      "studentCount": 60
+    }
+  ],
+  "batches": [],
+  "timeslots": [
+    {
+      "id": "6a8dcbcefcb5807b1a4ead1f",
+      "day": "MONDAY",
+      "startTime": "09:15",
+      "endTime": "10:15",
+      "periodNumber": 1,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead20",
+      "day": "MONDAY",
+      "startTime": "10:15",
+      "endTime": "11:15",
+      "periodNumber": 2,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead21",
+      "day": "MONDAY",
+      "startTime": "11:30",
+      "endTime": "12:30",
+      "periodNumber": 3,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead22",
+      "day": "MONDAY",
+      "startTime": "12:30",
+      "endTime": "13:30",
+      "periodNumber": 4,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead23",
+      "day": "MONDAY",
+      "startTime": "14:15",
+      "endTime": "15:15",
+      "periodNumber": 5,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead24",
+      "day": "MONDAY",
+      "startTime": "15:15",
+      "endTime": "16:15",
+      "periodNumber": 6,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead25",
+      "day": "MONDAY",
+      "startTime": "16:15",
+      "endTime": "17:15",
+      "periodNumber": 7,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead26",
+      "day": "TUESDAY",
+      "startTime": "09:15",
+      "endTime": "10:15",
+      "periodNumber": 1,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead27",
+      "day": "TUESDAY",
+      "startTime": "10:15",
+      "endTime": "11:15",
+      "periodNumber": 2,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead28",
+      "day": "TUESDAY",
+      "startTime": "11:30",
+      "endTime": "12:30",
+      "periodNumber": 3,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead29",
+      "day": "TUESDAY",
+      "startTime": "12:30",
+      "endTime": "13:30",
+      "periodNumber": 4,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead2a",
+      "day": "TUESDAY",
+      "startTime": "14:15",
+      "endTime": "15:15",
+      "periodNumber": 5,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead2b",
+      "day": "TUESDAY",
+      "startTime": "15:15",
+      "endTime": "16:15",
+      "periodNumber": 6,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead2c",
+      "day": "TUESDAY",
+      "startTime": "16:15",
+      "endTime": "17:15",
+      "periodNumber": 7,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead2d",
+      "day": "WEDNESDAY",
+      "startTime": "09:15",
+      "endTime": "10:15",
+      "periodNumber": 1,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead2e",
+      "day": "WEDNESDAY",
+      "startTime": "10:15",
+      "endTime": "11:15",
+      "periodNumber": 2,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead2f",
+      "day": "WEDNESDAY",
+      "startTime": "11:30",
+      "endTime": "12:30",
+      "periodNumber": 3,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead30",
+      "day": "WEDNESDAY",
+      "startTime": "12:30",
+      "endTime": "13:30",
+      "periodNumber": 4,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead31",
+      "day": "WEDNESDAY",
+      "startTime": "14:15",
+      "endTime": "15:15",
+      "periodNumber": 5,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead32",
+      "day": "WEDNESDAY",
+      "startTime": "15:15",
+      "endTime": "16:15",
+      "periodNumber": 6,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead33",
+      "day": "WEDNESDAY",
+      "startTime": "16:15",
+      "endTime": "17:15",
+      "periodNumber": 7,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead34",
+      "day": "THURSDAY",
+      "startTime": "09:15",
+      "endTime": "10:15",
+      "periodNumber": 1,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead35",
+      "day": "THURSDAY",
+      "startTime": "10:15",
+      "endTime": "11:15",
+      "periodNumber": 2,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead36",
+      "day": "THURSDAY",
+      "startTime": "11:30",
+      "endTime": "12:30",
+      "periodNumber": 3,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead37",
+      "day": "THURSDAY",
+      "startTime": "12:30",
+      "endTime": "13:30",
+      "periodNumber": 4,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead38",
+      "day": "THURSDAY",
+      "startTime": "14:15",
+      "endTime": "15:15",
+      "periodNumber": 5,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead39",
+      "day": "THURSDAY",
+      "startTime": "15:15",
+      "endTime": "16:15",
+      "periodNumber": 6,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead3a",
+      "day": "THURSDAY",
+      "startTime": "16:15",
+      "endTime": "17:15",
+      "periodNumber": 7,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead3b",
+      "day": "FRIDAY",
+      "startTime": "09:15",
+      "endTime": "10:15",
+      "periodNumber": 1,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead3c",
+      "day": "FRIDAY",
+      "startTime": "10:15",
+      "endTime": "11:15",
+      "periodNumber": 2,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead3d",
+      "day": "FRIDAY",
+      "startTime": "11:30",
+      "endTime": "12:30",
+      "periodNumber": 3,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead3e",
+      "day": "FRIDAY",
+      "startTime": "12:30",
+      "endTime": "13:30",
+      "periodNumber": 4,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead3f",
+      "day": "FRIDAY",
+      "startTime": "14:15",
+      "endTime": "15:15",
+      "periodNumber": 5,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead40",
+      "day": "FRIDAY",
+      "startTime": "15:15",
+      "endTime": "16:15",
+      "periodNumber": 6,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead41",
+      "day": "FRIDAY",
+      "startTime": "16:15",
+      "endTime": "17:15",
+      "periodNumber": 7,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead42",
+      "day": "SATURDAY",
+      "startTime": "09:15",
+      "endTime": "10:15",
+      "periodNumber": 1,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead43",
+      "day": "SATURDAY",
+      "startTime": "10:15",
+      "endTime": "11:15",
+      "periodNumber": 2,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead44",
+      "day": "SATURDAY",
+      "startTime": "11:30",
+      "endTime": "12:30",
+      "periodNumber": 3,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcefcb5807b1a4ead45",
+      "day": "SATURDAY",
+      "startTime": "12:30",
+      "endTime": "13:30",
+      "periodNumber": 4,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcffcb5807b1a4ead46",
+      "day": "SATURDAY",
+      "startTime": "14:15",
+      "endTime": "15:15",
+      "periodNumber": 5,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcffcb5807b1a4ead47",
+      "day": "SATURDAY",
+      "startTime": "15:15",
+      "endTime": "16:15",
+      "periodNumber": 6,
+      "isBreak": false,
+      "isActive": true
+    },
+    {
+      "id": "6a8dcbcffcb5807b1a4ead48",
+      "day": "SATURDAY",
+      "startTime": "16:15",
+      "endTime": "17:15",
+      "periodNumber": 7,
+      "isBreak": false,
+      "isActive": true
+    }
+  ],
+  "teachingAssignments": [
+    {
+      "id": "6a8dd048fcb5807b1a4ead88",
+      "teacherId": "6a8dcc66fcb5807b1a4ead4f",
+      "subjectId": "6a8dcc91fcb5807b1a4ead61",
+      "semesterId": "6a8dce19fcb5807b1a4ead81",
+      "classroomId": "6a8dccb6fcb5807b1a4ead78",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead89",
+      "teacherId": "6a8dcc66fcb5807b1a4ead50",
+      "subjectId": "6a8dcc91fcb5807b1a4ead62",
+      "semesterId": "6a8dce19fcb5807b1a4ead81",
+      "classroomId": "6a8dccb6fcb5807b1a4ead78",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead8a",
+      "teacherId": "6a8dcc66fcb5807b1a4ead4d",
+      "subjectId": "6a8dcc91fcb5807b1a4ead63",
+      "semesterId": "6a8dce19fcb5807b1a4ead81",
+      "classroomId": "6a8dccb6fcb5807b1a4ead78",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead8b",
+      "teacherId": "6a8dcc66fcb5807b1a4ead51",
+      "subjectId": "6a8dcc91fcb5807b1a4ead64",
+      "semesterId": "6a8dce19fcb5807b1a4ead81",
+      "classroomId": "6a8dccb6fcb5807b1a4ead78",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead8c",
+      "teacherId": "6a8dcc66fcb5807b1a4ead52",
+      "subjectId": "6a8dcc91fcb5807b1a4ead65",
+      "semesterId": "6a8dce19fcb5807b1a4ead81",
+      "classroomId": "6a8dccb6fcb5807b1a4ead78",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead8d",
+      "teacherId": "6a8dcc66fcb5807b1a4ead53",
+      "subjectId": "6a8dcc91fcb5807b1a4ead66",
+      "semesterId": "6a8dce19fcb5807b1a4ead81",
+      "classroomId": "6a8dccb6fcb5807b1a4ead78",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead8e",
+      "teacherId": "6a8dcc66fcb5807b1a4ead54",
+      "subjectId": "6a8dcc91fcb5807b1a4ead67",
+      "semesterId": "6a8dce19fcb5807b1a4ead81",
+      "classroomId": "6a8dccb6fcb5807b1a4ead78",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead8f",
+      "teacherId": "6a8dcc66fcb5807b1a4ead4c",
+      "subjectId": "6a8dcc91fcb5807b1a4ead68",
+      "semesterId": "6a8dce19fcb5807b1a4ead81",
+      "classroomId": "6a8dccb6fcb5807b1a4ead78",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd049fcb5807b1a4ead90",
+      "teacherId": "6a8dcc66fcb5807b1a4ead54",
+      "subjectId": "6a8dcc91fcb5807b1a4ead6b",
+      "semesterId": "6a8dce19fcb5807b1a4ead82",
+      "classroomId": "6a8dccb6fcb5807b1a4ead7c",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd049fcb5807b1a4ead91",
+      "teacherId": "6a8dcc66fcb5807b1a4ead51",
+      "subjectId": "6a8dcc91fcb5807b1a4ead6c",
+      "semesterId": "6a8dce19fcb5807b1a4ead82",
+      "classroomId": "6a8dccb6fcb5807b1a4ead7c",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd049fcb5807b1a4ead92",
+      "teacherId": "6a8dcc66fcb5807b1a4ead53",
+      "subjectId": "6a8dcc91fcb5807b1a4ead6d",
+      "semesterId": "6a8dce19fcb5807b1a4ead82",
+      "classroomId": "6a8dccb6fcb5807b1a4ead7c",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd049fcb5807b1a4ead93",
+      "teacherId": "6a8dcc66fcb5807b1a4ead55",
+      "subjectId": "6a8dcc91fcb5807b1a4ead6e",
+      "semesterId": "6a8dce19fcb5807b1a4ead82",
+      "classroomId": "6a8dccb6fcb5807b1a4ead7c",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd049fcb5807b1a4ead94",
+      "teacherId": "6a8dcc66fcb5807b1a4ead52",
+      "subjectId": "6a8dcc91fcb5807b1a4ead6f",
+      "semesterId": "6a8dce19fcb5807b1a4ead82",
+      "classroomId": "6a8dccb6fcb5807b1a4ead7c",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd049fcb5807b1a4ead95",
+      "teacherId": "6a8dcc66fcb5807b1a4ead49",
+      "subjectId": "6a8dcc91fcb5807b1a4ead6f",
+      "semesterId": "6a8dce19fcb5807b1a4ead82",
+      "classroomId": "6a8dccb6fcb5807b1a4ead77",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd049fcb5807b1a4ead96",
+      "teacherId": "6a8dcc66fcb5807b1a4ead55",
+      "subjectId": "6a8dcc91fcb5807b1a4ead70",
+      "semesterId": "6a8dce19fcb5807b1a4ead82",
+      "classroomId": "6a8dccb6fcb5807b1a4ead7c",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd049fcb5807b1a4ead97",
+      "teacherId": "6a8dcc66fcb5807b1a4ead56",
+      "subjectId": "6a8dcc91fcb5807b1a4ead71",
+      "semesterId": "6a8dce19fcb5807b1a4ead82",
+      "classroomId": "6a8dccb6fcb5807b1a4ead7c",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead84",
+      "teacherId": "6a8dcc66fcb5807b1a4ead49",
+      "subjectId": "6a8dcc91fcb5807b1a4ead58",
+      "semesterId": "6a8dce19fcb5807b1a4ead83",
+      "classroomId": "6a8dccb6fcb5807b1a4ead80",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead85",
+      "teacherId": "6a8dcc66fcb5807b1a4ead4a",
+      "subjectId": "6a8dcc91fcb5807b1a4ead59",
+      "semesterId": "6a8dce19fcb5807b1a4ead83",
+      "classroomId": "6a8dccb6fcb5807b1a4ead80",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead86",
+      "teacherId": "6a8dcc66fcb5807b1a4ead4b",
+      "subjectId": "6a8dcc91fcb5807b1a4ead5a",
+      "semesterId": "6a8dce19fcb5807b1a4ead83",
+      "classroomId": "6a8dccb6fcb5807b1a4ead80",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    },
+    {
+      "id": "6a8dd048fcb5807b1a4ead87",
+      "teacherId": "6a8dcc66fcb5807b1a4ead4c",
+      "subjectId": "6a8dcc91fcb5807b1a4ead5b",
+      "semesterId": "6a8dce19fcb5807b1a4ead83",
+      "classroomId": "6a8dccb6fcb5807b1a4ead80",
+      "classroomRequirements": [],
+      "periodsPerWeek": 3,
+      "isLab": false
+    }
+  ],
+  "hardConstraints": {
+    "enforceTeacherConflicts": true,
+    "enforceClassroomConflicts": true,
+    "enforceSemesterConflicts": true,
+    "enforceTeacherAvailability": true,
+    "enforceClassroomCapacity": true,
+    "enforceLabCompatibility": true,
+    "enforceWeeklyPeriodRequirements": true,
+    "enforceTeacherWorkloadLimits": true
+  },
+  "softConstraints": {
+    "avoidEarlyMorning": 5,
+    "avoidFridayAfternoon": 4,
+    "avoidTeacherGaps": 6,
+    "preferConsecutiveClasses": 4,
+    "balanceTeacherWorkload": 7,
+    "balanceStudentWorkload": 6,
+    "avoidUnnecessaryClassroomChanges": 5,
+    "preferTeacherPreferredPeriods": 7,
+    "preferPreferredClassrooms": 4,
+    "avoidExcessiveConsecutiveClasses": 6,
+    "spreadSubjects": 7
+  },
+  "timeLimitSeconds": 60
+}

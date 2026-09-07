@@ -22,6 +22,49 @@ import {
   Zap,
 } from 'lucide-react';
 
+export function formatGenerationFailureMessage(
+  payload?: { errorMessage?: string; violations?: Array<{ message?: string; type?: string; entityType?: string; details?: Record<string, unknown> }> }
+): string {
+  const violations = Array.isArray(payload?.violations) ? payload.violations : [];
+
+  if (violations.length > 0) {
+    const firstMessage = violations.find((violation) => typeof violation?.message === 'string' && violation.message.trim());
+    if (firstMessage?.message) {
+      return firstMessage.message;
+    }
+  }
+
+  if (typeof payload?.errorMessage === 'string' && payload.errorMessage.trim()) {
+    return payload.errorMessage;
+  }
+
+  return 'Generation failed to satisfy constraints.';
+}
+
+export function formatApiErrorMessage(error: unknown): string {
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    const maybeError = error as { message?: string; response?: { data?: { message?: string; details?: { invalidAssignments?: Array<{ detail?: string }> } } } };
+    if (maybeError.response?.data?.message) {
+      return maybeError.response.data.message;
+    }
+    if (maybeError.message) {
+      return maybeError.message;
+    }
+    if (maybeError.response?.data?.details && Array.isArray(maybeError.response.data.details.invalidAssignments)) {
+      const firstInvalid = maybeError.response.data.details.invalidAssignments[0];
+      if (firstInvalid?.detail) {
+        return firstInvalid.detail;
+      }
+    }
+  }
+
+  return 'Generation failed';
+}
+
 export const GeneratePage: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
@@ -109,18 +152,29 @@ export const GeneratePage: React.FC = () => {
         toast.success(`Successfully generated schedule with ${data.timetable.length} periods!`);
       } else {
         setActiveStep('FAILED');
+        const violationList = data.violations || [];
         setGenerationResult({
           generationId: data.generation._id,
           score: 0,
           resultCount: 0,
-          violations: data.violations || [],
+          violations: violationList,
         });
-        toast.error(data.errorMessage || 'Generation failed to satisfy constraints.');
+
+        const formattedMessage = formatGenerationFailureMessage({
+          errorMessage: data.errorMessage,
+          violations: violationList,
+        });
+        const detailText = violationList.length > 0
+          ? violationList.map((violation) => violation.message).filter(Boolean).join(' • ')
+          : formattedMessage;
+
+        toast.error(detailText || formattedMessage, 'Solver Infeasible');
       }
     },
     onError: (err) => {
       setActiveStep('FAILED');
-      toast.error((err as Error).message, 'Solver Failure');
+      const detailed = formatApiErrorMessage(err);
+      toast.error(detailed || 'Generation failed', 'Generation Error');
     },
   });
 

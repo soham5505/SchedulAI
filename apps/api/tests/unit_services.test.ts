@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../src/config/env.js';
 import { importService } from '../src/modules/imports/import.service.js';
 import { aiService } from '../src/modules/ai/ai.service.js';
+import { GenerationService } from '../src/modules/generations/generation.service.js';
 import * as XLSX from 'xlsx';
 
 describe('Core Backend Services & AI', () => {
@@ -59,5 +60,95 @@ describe('Core Backend Services & AI', () => {
     const explanation = await aiService.explainConflict(conflict);
     expect(explanation.summary).toContain('Dr. Alan Turing');
     expect(explanation.recommendedActions.length).toBeGreaterThan(0);
+  });
+
+  it('rejects assignments with a missing teacher reference using a clear API error', () => {
+    const service = new GenerationService();
+    const assignments = [{
+      _id: 'a1',
+      teacherId: null,
+      subjectId: { _id: 'sub-1', name: 'Algorithms' },
+      semesterId: 'sem-1',
+      batchId: null,
+      classroomId: null,
+      classroomRequirements: [],
+      periodsPerWeek: 2,
+      isLab: false,
+    }];
+
+    expect(() => (service as any).validateAssignmentReferences(assignments, new Set(['sem-1']))).toThrowError(
+      'Generation blocked: Assignment a1 references a missing teacher.'
+    );
+  });
+
+  it('rejects assignments with a missing subject reference using a clear API error', () => {
+    const service = new GenerationService();
+    const assignments = [{
+      _id: 'a2',
+      teacherId: { _id: 'teacher-2', name: 'Dr. Hopper' },
+      subjectId: null,
+      semesterId: 'sem-1',
+      batchId: null,
+      classroomId: null,
+      classroomRequirements: [],
+      periodsPerWeek: 3,
+      isLab: false,
+    }];
+
+    expect(() => (service as any).validateAssignmentReferences(assignments, new Set(['sem-1']))).toThrowError(
+      'Generation blocked: Assignment a2 references a missing subject.'
+    );
+  });
+
+  it('rejects assignments with a missing semester reference using a clear API error', () => {
+    const service = new GenerationService();
+    const assignments = [{
+      _id: 'a3',
+      teacherId: { _id: 'teacher-3', name: 'Dr. Turing' },
+      subjectId: { _id: 'sub-3', name: 'Databases' },
+      semesterId: 'missing-sem',
+      batchId: null,
+      classroomId: null,
+      classroomRequirements: [],
+      periodsPerWeek: 4,
+      isLab: false,
+    }];
+
+    expect(() => (service as any).validateAssignmentReferences(assignments, new Set(['sem-1']))).toThrowError(
+      'Generation blocked: Assignment a3 references a missing semester.'
+    );
+  });
+
+  it('keeps whole-class batchId null assignments valid and accepts valid batch assignments', () => {
+    const service = new GenerationService();
+    const assignments = [
+      {
+        _id: 'a4',
+        teacherId: { _id: 'teacher-4', name: 'Dr. Ada' },
+        subjectId: { _id: 'sub-4', name: 'OS' },
+        semesterId: 'sem-1',
+        batchId: null,
+        classroomId: null,
+        classroomRequirements: [],
+        periodsPerWeek: 2,
+        isLab: false,
+      },
+      {
+        _id: 'a5',
+        teacherId: { _id: 'teacher-5', name: 'Dr. Lin' },
+        subjectId: { _id: 'sub-5', name: 'Networks' },
+        semesterId: 'sem-1',
+        batchId: 'batch-5',
+        classroomId: null,
+        classroomRequirements: [],
+        periodsPerWeek: 3,
+        isLab: false,
+      },
+    ];
+
+    expect(() => (service as any).validateAssignmentReferences(assignments, new Set(['sem-1']), new Set(['batch-5']))).not.toThrow();
+    const result = (service as any).sanitizeAssignmentsForScheduler(assignments);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ semesterId: 'sem-1' });
   });
 });

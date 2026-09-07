@@ -1,0 +1,154 @@
+Loading payload from: D:\SchedulAI\solver_payload.json
+
+--- Running Pre-Checks ---
+Pre-checks passed (no violations reported by precheck).
+
+--- Running Solver Diagnostics ---
+
+================================================================================
+SCHEDULER DIAGNOSTICS
+================================================================================
+
+SEMESTER WORKLOAD ANALYSIS:
+--------------------------------------------------------------------------------
+
+Semester: TEIT 3rd Semester (A)
+  Unique Courses: 8
+  Theory Weekly Periods: 24
+  Lab Weekly Periods: 0
+  Total Weekly Periods Required: 24
+  Total Assignments: 8
+  Active Time Slots Available: 42
+
+Semester: TEIT 5th Semester (A)
+  Unique Courses: 7
+  Theory Weekly Periods: 24
+  Lab Weekly Periods: 0
+  Total Weekly Periods Required: 24
+  Total Assignments: 8
+  Active Time Slots Available: 42
+
+Semester: TEIT 7th Semester (A)
+  Unique Courses: 4
+  Theory Weekly Periods: 12
+  Lab Weekly Periods: 0
+  Total Weekly Periods Required: 12
+  Total Assignments: 4
+  Active Time Slots Available: 42
+
+
+FACULTY WORKLOAD ANALYSIS:
+--------------------------------------------------------------------------------
+
+Faculty: 6a8dcc66fcb5807b1a4ead4f
+  Allocated Weekly Periods: 3
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 1
+  Subjects: 2343111 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead50
+  Allocated Weekly Periods: 3
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 1
+  Subjects: 2343112 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead4d
+  Allocated Weekly Periods: 3
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 1
+  Subjects: 2343113 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead51
+  Allocated Weekly Periods: 6
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 2
+  Subjects: 2343114 (3), 2345112 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead52
+  Allocated Weekly Periods: 6
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 2
+  Subjects: OEC301 (3), MDC501 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead53
+  Allocated Weekly Periods: 6
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 2
+  Subjects: 2343611 (3), 2345113 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead54
+  Allocated Weekly Periods: 6
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 2
+  Subjects: 2993511 (3), 2345111 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead4c
+  Allocated Weekly Periods: 6
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 2
+  Subjects: 2993512 (3), ITDO7024 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead55
+  Allocated Weekly Periods: 6
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 2
+  Subjects: 23451142 (3), OEC501 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead49
+  Allocated Weekly Periods: 6
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 2
+  Subjects: MDC501 (3), ITC701 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead56
+  Allocated Weekly Periods: 3
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 1
+  Subjects: 2345511 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead4a
+  Allocated Weekly Periods: 3
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 1
+  Subjects: ITC702 (3)
+
+Faculty: 6a8dcc66fcb5807b1a4ead4b
+  Allocated Weekly Periods: 3
+  Configured Max Weekly Periods: N/A
+  Max Weekly Periods Source: UI default (not from source data)
+  Total Assignments: 1
+  Subjects: ITDO7013 (3)
+
+Active Time Slots: 42
+================================================================================
+
+
+--- Selective Constraint Feasibility Test ---
+Result for Default (All hard constraints enabled): OPTIMAL
+  --> FOUND KEY CONSTRAINT: Disabling 'Default (All hard constraints enabled)' makes the solver feasible!
+Result for Disable Teacher Overlaps: OPTIMAL
+  --> FOUND KEY CONSTRAINT: Disabling 'Disable Teacher Overlaps' makes the solver feasible!
+Result for Disable Classroom Overlaps: OPTIMAL
+  --> FOUND KEY CONSTRAINT: Disabling 'Disable Classroom Overlaps' makes the solver feasible!
+Result for Disable Semester/Batch Overlaps: OPTIMAL
+  --> FOUND KEY CONSTRAINT: Disabling 'Disable Semester/Batch Overlaps' makes the solver feasible!
+Result for Disable Teacher Availability: OPTIMAL
+  --> FOUND KEY CONSTRAINT: Disabling 'Disable Teacher Availability' makes the solver feasible!
+Result for Disable Classroom Capacity: OPTIMAL
+  --> FOUND KEY CONSTRAINT: Disabling 'Disable Classroom Capacity' makes the solver feasible!
+Result for Disable Lab Compatibility: OPTIMAL
+  --> FOUND KEY CONSTRAINT: Disabling 'Disable Lab Compatibility' makes the solver feasible!
+Result for Disable Teacher Workload Limits: OPTIMAL
+  --> FOUND KEY CONSTRAINT: Disabling 'Disable Teacher Workload Limits' makes the solver feasible!

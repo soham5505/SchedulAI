@@ -21,6 +21,7 @@ import {
   ITeacher,
   IClassroom,
   IGeneration,
+  IBatch,
   DayOfWeek,
   ISchedulerViolation,
   ISlotSuggestion,
@@ -61,15 +62,17 @@ const TimetableCard: React.FC<TimetableCardProps> = ({ entry, isDragging = false
 
   const style = transform
     ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        zIndex: 50,
-      }
+      transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+      zIndex: 50,
+    }
     : undefined;
 
   const subject = entry.subjectId as unknown as { name?: string; code?: string; isLab?: boolean };
   const teacher = entry.teacherId as unknown as { name?: string; employeeId?: string };
   const classroom = entry.classroomId as unknown as { name?: string; building?: string; roomNumber?: string };
   const semester = entry.semesterId as unknown as { name?: string; section?: string };
+  const batch = entry.batchId as unknown as { code?: string } | null | undefined;
+  const batchLabel = batch?.code ?? 'ALL';
 
   const isLab = entry.periodType === 'LAB' || subject?.isLab;
 
@@ -79,13 +82,12 @@ const TimetableCard: React.FC<TimetableCardProps> = ({ entry, isDragging = false
       style={style}
       {...listeners}
       {...attributes}
-      className={`p-3 rounded-xl border text-xs select-none cursor-grab active:cursor-grabbing transition-all duration-150 shadow-md ${
-        isDragging
+      className={`p-3 rounded-xl border text-xs select-none cursor-grab active:cursor-grabbing transition-all duration-150 shadow-md ${isDragging
           ? 'opacity-50 ring-2 ring-teal-400 bg-teal-950/80 border-teal-500 scale-105'
           : isLab
-          ? 'bg-purple-950/40 hover:bg-purple-900/50 border-purple-500/30 text-purple-100 hover:border-purple-400'
-          : 'bg-slate-950/80 hover:bg-slate-800/80 border-slate-700/80 text-slate-100 hover:border-teal-500/50'
-      }`}
+            ? 'bg-purple-950/40 hover:bg-purple-900/50 border-purple-500/30 text-purple-100 hover:border-purple-400'
+            : 'bg-slate-950/80 hover:bg-slate-800/80 border-slate-700/80 text-slate-100 hover:border-teal-500/50'
+        }`}
     >
       <div className="flex items-start justify-between gap-1 mb-1.5">
         <span className="font-bold text-slate-100 truncate">{subject?.name || 'Subject'}</span>
@@ -97,6 +99,11 @@ const TimetableCard: React.FC<TimetableCardProps> = ({ entry, isDragging = false
       </div>
 
       <div className="space-y-1 text-[11px] text-slate-300">
+        <div className="flex items-center gap-1.5 truncate">
+          <Layers className="w-3 h-3 text-indigo-400 shrink-0" />
+          <span className="truncate text-indigo-300 font-mono text-[10px]">{batchLabel}</span>
+        </div>
+
         <div className="flex items-center gap-1.5 truncate">
           <User className="w-3 h-3 text-teal-400 shrink-0" />
           <span className="truncate">{teacher?.name || 'Teacher'}</span>
@@ -137,13 +144,12 @@ const DroppableCell: React.FC<DroppableCellProps> = ({ day, timeSlot, entries })
   return (
     <div
       ref={setNodeRef}
-      className={`min-h-[100px] p-2 rounded-xl border transition-all duration-150 flex flex-col gap-2 ${
-        isOver
+      className={`min-h-[100px] p-2 rounded-xl border transition-all duration-150 flex flex-col gap-2 ${isOver
           ? 'bg-teal-950/40 border-teal-400 ring-2 ring-teal-500/30'
           : entries.length > 0
-          ? 'bg-slate-900/40 border-slate-800'
-          : 'bg-slate-950/20 border-slate-800/50 hover:bg-slate-900/30'
-      }`}
+            ? 'bg-slate-900/40 border-slate-800'
+            : 'bg-slate-950/20 border-slate-800/50 hover:bg-slate-900/30'
+        }`}
     >
       {entries.map((entry) => (
         <TimetableCard key={entry._id} entry={entry} />
@@ -169,6 +175,7 @@ export const TimetablePage: React.FC = () => {
   const [selectedSemesterId, setSelectedSemesterId] = useState<string>('');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
   const [selectedClassroomId, setSelectedClassroomId] = useState<string>('');
+  const [selectedBatchId, setSelectedBatchId] = useState<string>('');
 
   // Conflict & Suggestions Modal State
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
@@ -239,6 +246,19 @@ export const TimetablePage: React.FC = () => {
     },
   });
 
+  // Fetch batches dynamically based on selected semester
+  const { data: batchesForSemester = [] } = useQuery<IBatch[]>({
+    queryKey: ['batches-filter', selectedSemesterId],
+    queryFn: async () => {
+      if (!selectedSemesterId) return [];
+      const res = await apiClient.get<{ success: boolean; data: IBatch[] }>(
+        `/batches?semesterId=${selectedSemesterId}&limit=100`
+      );
+      return res.data.data;
+    },
+    enabled: !!selectedSemesterId,
+  });
+
   // 3. Fetch Timetable Entries for current generation & filters
   const {
     data: entries = [],
@@ -258,6 +278,19 @@ export const TimetablePage: React.FC = () => {
     },
     enabled: !!selectedGenId,
   });
+
+  // Client-side batch filter: specific batch → show that batch + ALL (null batchId) entries;
+  // no batch selected → show everything
+  const filteredEntries = useMemo(() => {
+    if (!selectedBatchId) return entries;
+    return entries.filter((e) => {
+      const bid =
+        typeof e.batchId === 'string'
+          ? e.batchId
+          : (e.batchId as unknown as { _id?: string })?._id ?? null;
+      return bid === selectedBatchId || bid == null;
+    });
+  }, [entries, selectedBatchId]);
 
   // Mutation for moving an entry
   const moveMutation = useMutation({
@@ -399,7 +432,7 @@ export const TimetablePage: React.FC = () => {
     <div className="space-y-6">
       {/* Top Filter & Action Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl no-print">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 flex-1">
           {/* Generation Version Selector */}
           <Select
             label="Schedule Version"
@@ -419,7 +452,10 @@ export const TimetablePage: React.FC = () => {
           <Select
             label="Filter Semester"
             value={selectedSemesterId}
-            onChange={(e) => setSelectedSemesterId(e.target.value)}
+            onChange={(e) => {
+              setSelectedSemesterId(e.target.value);
+              setSelectedBatchId(''); // clear batch when semester changes
+            }}
             options={semesters.map((s) => ({
               value: s._id,
               label: `${s.name} (${s.section})`,
@@ -449,6 +485,18 @@ export const TimetablePage: React.FC = () => {
               label: `${c.building} - ${c.roomNumber} (${c.name})`,
             }))}
             placeholder="All Classrooms"
+          />
+
+          {/* Batch Filter — populated dynamically from selected semester */}
+          <Select
+            label="Filter Batch"
+            value={selectedBatchId}
+            onChange={(e) => setSelectedBatchId(e.target.value)}
+            options={batchesForSemester.map((b) => ({
+              value: b._id,
+              label: b.code,
+            }))}
+            placeholder={selectedSemesterId ? 'All Batches' : 'Select Semester First'}
           />
         </div>
 
@@ -545,8 +593,8 @@ export const TimetablePage: React.FC = () => {
                         (ts) => ts.day === day && ts.periodNumber === periodSlot.periodNumber
                       );
 
-                      // Find entries in this day & time slot
-                      const slotEntries = entries.filter((e) => {
+                      // Find entries in this day & time slot (use filteredEntries for batch filter)
+                      const slotEntries = filteredEntries.filter((e) => {
                         const tsId = typeof e.timeSlotId === 'string' ? e.timeSlotId : (e.timeSlotId as unknown as { _id: string })?._id;
                         return (
                           e.day === day &&

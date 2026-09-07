@@ -35,6 +35,136 @@ export interface GenerateDTO {
 }
 
 export class GenerationService {
+  private validateAssignmentReferences(
+    assignments: Array<Record<string, any>>,
+    semesterIds: Set<string>,
+    batchIds: Set<string> = new Set(),
+    classroomIds: Set<string> = new Set()
+  ) {
+    const invalid: Array<{ assignmentId: string; missing: string; detail: string; metadata: Record<string, unknown> }> = [];
+
+    for (const assignment of assignments) {
+      const assignmentId = assignment?._id ? String(assignment._id) : 'unknown';
+      const semesterId = assignment?.semesterId ? String(assignment.semesterId) : '';
+      const teacher = assignment?.teacherId as Record<string, unknown> | null | undefined;
+      const subject = assignment?.subjectId as Record<string, unknown> | null | undefined;
+      const batchId = assignment?.batchId ? String(assignment.batchId) : null;
+      const classroom = assignment?.classroomId as Record<string, unknown> | null | undefined;
+      const classroomId = assignment?.classroomId ? String(assignment.classroomId) : null;
+
+      if (!semesterId || !semesterIds.has(semesterId)) {
+        invalid.push({
+          assignmentId,
+          missing: 'semester',
+          detail: `Generation blocked: Assignment ${assignmentId} references a missing semester.`,
+          metadata: { assignmentId, semesterId: semesterId || 'missing', subject: subject?.name || subject?.code || 'unknown' },
+        });
+      }
+
+      if (!teacher || !teacher._id) {
+        invalid.push({
+          assignmentId,
+          missing: 'teacher',
+          detail: `Generation blocked: Assignment ${assignmentId} references a missing teacher.`,
+          metadata: { assignmentId, teacherId: teacher ? String(teacher._id ?? 'missing') : 'missing', subject: subject?.name || subject?.code || 'unknown', semester: semesterId || 'missing' },
+        });
+      }
+
+      if (!subject || !subject._id) {
+        invalid.push({
+          assignmentId,
+          missing: 'subject',
+          detail: `Generation blocked: Assignment ${assignmentId} references a missing subject.`,
+          metadata: { assignmentId, subjectId: subject ? String(subject._id ?? 'missing') : 'missing', semester: semesterId || 'missing' },
+        });
+      }
+
+      if (batchId && !batchIds.has(batchId)) {
+        invalid.push({
+          assignmentId,
+          missing: 'batch',
+          detail: `Generation blocked: Assignment ${assignmentId} references a missing batch.`,
+          metadata: { assignmentId, batchId, semester: semesterId || 'missing' },
+        });
+      }
+
+      if (classroomId && (!classroom || !classroom._id || !classroomIds.has(classroomId))) {
+        invalid.push({
+          assignmentId,
+          missing: 'classroom',
+          detail: `Generation blocked: Assignment ${assignmentId} references a missing classroom.`,
+          metadata: { assignmentId, classroomId, semester: semesterId || 'missing' },
+        });
+      }
+    }
+
+    if (invalid.length > 0) {
+      const unique = invalid.filter(
+        (item, index, list) => list.findIndex((candidate) => candidate.assignmentId === item.assignmentId && candidate.missing === item.missing) === index
+      );
+
+      const first = unique[0];
+
+      throw new ApiError(
+        first.detail,
+        400,
+        ERROR_CODES.BAD_REQUEST,
+        {
+          type: 'INVALID_ASSIGNMENT_REFERENCE',
+          invalidAssignments: unique.map((item) => ({
+            assignmentId: item.assignmentId,
+            missing: item.missing,
+            detail: item.detail,
+            ...item.metadata,
+          })),
+        }
+      );
+    }
+  }
+
+  private sanitizeAssignmentsForScheduler(assignments: Array<Record<string, any>>) {
+    const seen = new Set<string>();
+    const sanitized = assignments
+      .map((a) => {
+        const teacher = a.teacherId as Record<string, unknown> | null | undefined;
+        const subject = a.subjectId as Record<string, unknown> | null | undefined;
+
+        if (!teacher || !subject || !teacher._id || !subject._id) {
+          logger.warn(
+            `Skipping assignment ${String(a._id ?? 'unknown')} because teacher/subject reference is missing: teacher=${teacher ? String(teacher._id ?? 'missing') : 'null'}, subject=${subject ? String(subject._id ?? 'missing') : 'null'}`
+          );
+          return null;
+        }
+
+        const record = {
+          id: a._id?.toString?.() ?? String(a._id ?? ''),
+          teacherId: String(teacher._id),
+          subjectId: String(subject._id),
+          semesterId: a.semesterId?.toString?.() ?? String(a.semesterId),
+          ...(a.batchId ? { batchId: a.batchId.toString() } : {}),
+          ...(a.classroomId ? { classroomId: a.classroomId.toString() } : {}),
+          classroomRequirements: a.classroomRequirements || [],
+          periodsPerWeek: a.periodsPerWeek,
+          isLab: a.isLab || false,
+          key: `${String(teacher._id)}|${String(subject._id)}|${a.semesterId?.toString?.() ?? String(a.semesterId)}|${a.batchId?.toString?.() ?? 'ALL'}`,
+        };
+
+        return record;
+      })
+      .filter((a): a is NonNullable<typeof a> => a !== null)
+      .filter((a) => {
+        if (seen.has(a.key)) {
+          logger.warn(`Deduplication: Skipping duplicate assignment ${a.id} (teacher: ${a.teacherId}, subject: ${a.subjectId}, semester: ${a.semesterId})`);
+          return false;
+        }
+        seen.add(a.key);
+        return true;
+      })
+      .map(({ key, ...rest }) => rest);
+
+    return sanitized;
+  }
+
   async generate(data: GenerateDTO, user: IUser) {
     logger.info(`Starting timetable generation '${data.name}' for ${data.semesterIds.length} semester(s)`);
     logger.info(`Semester IDs received: ${data.semesterIds.join(', ')}`);
@@ -55,6 +185,12 @@ export class GenerationService {
         .lean(),
       BatchModel.find({ semesterId: { $in: semesterObjectIds }, isActive: true }).lean(),
     ]);
+
+    const semesterIdSet = new Set(semesters.map((semester) => String(semester._id)));
+    const batchIdSet = new Set(batches.map((batch) => String(batch._id)));
+    const classroomIdSet = new Set(classrooms.map((classroom) => String(classroom._id)));
+
+    this.validateAssignmentReferences(assignments as Array<Record<string, any>>, semesterIdSet, batchIdSet, classroomIdSet);
 
     logger.info(`Found ${semesters.length} active semesters`);
     logger.info(`Found ${assignments.length} teaching assignments`);
@@ -161,39 +297,12 @@ export class GenerationService {
         isActive: ts.isActive,
       })),
       teachingAssignments: (() => {
-        // Deduplicate only exact scheduling identities; batch rows are distinct assignments.
-        const seen = new Set<string>();
-        const deduplicated = assignments
-          .map((a) => {
-            const tObj = a.teacherId as unknown as Record<string, unknown>;
-            const sObj = a.subjectId as unknown as Record<string, unknown>;
-            return {
-              id: a._id.toString(),
-              teacherId: String(tObj._id),
-              subjectId: String(sObj._id),
-              semesterId: a.semesterId.toString(),
-              ...(a.batchId ? { batchId: a.batchId.toString() } : {}),
-              ...(a.classroomId ? { classroomId: a.classroomId.toString() } : {}),
-              classroomRequirements: a.classroomRequirements || [],
-              periodsPerWeek: a.periodsPerWeek,
-              isLab: a.isLab || false,
-              key: `${String(tObj._id)}|${String(sObj._id)}|${a.semesterId.toString()}|${a.batchId?.toString() || 'ALL'}`,
-            };
-          })
-          .filter((a) => {
-            if (seen.has(a.key)) {
-              logger.warn(`Deduplication: Skipping duplicate assignment ${a.id} (teacher: ${a.teacherId}, subject: ${a.subjectId}, semester: ${a.semesterId})`);
-              return false;
-            }
-            seen.add(a.key);
-            return true;
-          })
-          .map(({ key, ...rest }) => rest);
+        const deduplicated = this.sanitizeAssignmentsForScheduler(assignments as Array<Record<string, any>>);
 
         if (deduplicated.length < assignments.length) {
-          logger.info(`Assignment deduplication: Reduced from ${assignments.length} to ${deduplicated.length} (removed ${assignments.length - deduplicated.length} duplicates)`);
+          logger.info(`Assignment sanitization: Reduced from ${assignments.length} to ${deduplicated.length} (removed ${assignments.length - deduplicated.length} invalid or duplicate assignments)`);
         }
-        
+
         return deduplicated;
       })(),
       hardConstraints: { ...DEFAULT_HARD_CONSTRAINTS, ...(data.hardConstraints || {}) },
@@ -244,7 +353,12 @@ export class GenerationService {
         // Mark Generation as FAILED with diagnostic violations
         generation.status = 'FAILED';
         generation.completedAt = new Date();
-        generation.errorMessage = solverResult.errorMessage || 'Scheduler could not find a feasible solution.';
+        const violationMessage =
+          solverResult.violations && solverResult.violations.length > 0
+            ? solverResult.violations.map((violation) => violation.message).join(' ')
+            : solverResult.errorMessage || 'Scheduler could not find a feasible solution.';
+
+        generation.errorMessage = violationMessage;
         generation.violations = solverResult.violations;
         generation.statistics = solverResult.statistics || {};
         await generation.save();
@@ -255,7 +369,7 @@ export class GenerationService {
           generation: generation.toJSON(),
           timetable: [],
           score: 0,
-          violations: solverResult.violations,
+          violations: solverResult.violations || [],
           errorMessage: generation.errorMessage,
         };
       }

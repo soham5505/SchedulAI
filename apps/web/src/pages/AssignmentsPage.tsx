@@ -7,6 +7,7 @@ import {
   ITeacher,
   ISubject,
   ISemester,
+  IBatch,
   PaginationMeta,
 } from '@schedulai/shared-types';
 import { DataTable, Column } from '../components/ui/DataTable.js';
@@ -15,7 +16,7 @@ import { Modal } from '../components/ui/Modal.js';
 import { Input } from '../components/ui/Input.js';
 import { Select } from '../components/ui/Select.js';
 import { Badge } from '../components/ui/Badge.js';
-import { Plus, Edit2, Trash2, Link as LinkIcon, User, BookOpen, GraduationCap } from 'lucide-react';
+import { Plus, Edit2, Trash2, User, BookOpen, GraduationCap, Layers } from 'lucide-react';
 
 export const AssignmentsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -29,6 +30,7 @@ export const AssignmentsPage: React.FC = () => {
   const [teacherId, setTeacherId] = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [semesterId, setSemesterId] = useState('');
+  const [batchId, setBatchId] = useState(''); // '' = whole class (null)
   const [periodsPerWeek, setPeriodsPerWeek] = useState(4);
   const [isLab, setIsLab] = useState(false);
 
@@ -56,6 +58,19 @@ export const AssignmentsPage: React.FC = () => {
     },
   });
 
+  // Dynamic batch list — keyed on the form's selected semesterId
+  const { data: batchesForSemester = [] } = useQuery<IBatch[]>({
+    queryKey: ['batches-form', semesterId],
+    queryFn: async () => {
+      if (!semesterId) return [];
+      const res = await apiClient.get<{ success: boolean; data: IBatch[] }>(
+        `/batches?semesterId=${semesterId}&limit=100`
+      );
+      return res.data.data;
+    },
+    enabled: !!semesterId,
+  });
+
   const { data, isLoading } = useQuery<{ assignments: ITeachingAssignment[]; meta: PaginationMeta }>({
     queryKey: ['assignments', page],
     queryFn: async () => {
@@ -72,6 +87,7 @@ export const AssignmentsPage: React.FC = () => {
         teacherId,
         subjectId,
         semesterId,
+        batchId: batchId || null, // empty string → null (whole class)
         periodsPerWeek: Number(periodsPerWeek),
         isLab,
       };
@@ -110,6 +126,7 @@ export const AssignmentsPage: React.FC = () => {
     setTeacherId(teachers[0]?._id || '');
     setSubjectId(subjects[0]?._id || '');
     setSemesterId(semesters[0]?._id || '');
+    setBatchId('');
     setPeriodsPerWeek(4);
     setIsLab(false);
     setModalOpen(true);
@@ -120,10 +137,14 @@ export const AssignmentsPage: React.FC = () => {
     const tId = typeof a.teacherId === 'string' ? a.teacherId : (a.teacherId as ITeacher)?._id;
     const sId = typeof a.subjectId === 'string' ? a.subjectId : (a.subjectId as ISubject)?._id;
     const semId = typeof a.semesterId === 'string' ? a.semesterId : (a.semesterId as ISemester)?._id;
+    const bId = a.batchId == null ? ''
+      : typeof a.batchId === 'string' ? a.batchId
+        : (a.batchId as IBatch)?._id || '';
 
     setTeacherId(tId || '');
     setSubjectId(sId || '');
     setSemesterId(semId || '');
+    setBatchId(bId);
     setPeriodsPerWeek(a.periodsPerWeek);
     setIsLab(a.isLab);
     setModalOpen(true);
@@ -132,6 +153,7 @@ export const AssignmentsPage: React.FC = () => {
   const handleCloseModal = () => {
     setModalOpen(false);
     setEditingAssignment(null);
+    setBatchId('');
   };
 
   const columns: Column<ITeachingAssignment>[] = [
@@ -172,6 +194,19 @@ export const AssignmentsPage: React.FC = () => {
       render: (item) => {
         const semester = item.semesterId as ISemester;
         return <Badge variant="teal">{semester ? `${semester.name} (${semester.section})` : 'Semester'}</Badge>;
+      },
+    },
+    {
+      key: 'batchId',
+      header: 'Batch',
+      render: (item) => {
+        const b = item.batchId as IBatch | null | undefined;
+        return (
+          <div className="flex items-center gap-1.5">
+            <Layers className="w-3 h-3 text-indigo-400 shrink-0" />
+            <Badge variant={b?.code ? 'blue' : 'slate'}>{b?.code ?? 'ALL'}</Badge>
+          </div>
+        );
       },
     },
     {
@@ -269,11 +304,25 @@ export const AssignmentsPage: React.FC = () => {
           />
 
           <Select
-            label="Target Semester Batch"
+            label="Target Semester"
             value={semesterId}
-            onChange={(e) => setSemesterId(e.target.value)}
+            onChange={(e) => {
+              setSemesterId(e.target.value);
+              setBatchId(''); // clear batch when semester changes
+            }}
             options={semesters.map((s) => ({ value: s._id, label: `${s.name} (Sec ${s.section} - ${s.studentCount} students)` }))}
             required
+          />
+
+          {/* Dynamic batch picker — options come from the selected semester */}
+          <Select
+            label="Batch / Division"
+            value={batchId}
+            onChange={(e) => setBatchId(e.target.value)}
+            options={[
+              { value: '', label: 'Whole Class (ALL)' },
+              ...batchesForSemester.map((b) => ({ value: b._id, label: b.code })),
+            ]}
           />
 
           <Input

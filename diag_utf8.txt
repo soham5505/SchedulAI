@@ -1,0 +1,74 @@
+﻿
+> @schedulai/api@1.0.0 diagnostic:assignments
+> tsx src/scripts/diagnostic-assignments.ts
+
+[2026-08-25T18:21:54.691Z] [INFO] [AssignmentDiagnostic]: Connected to MongoDB 
+[2026-08-25T18:21:54.724Z] [INFO] [AssignmentDiagnostic]: 
+Total assignments in database: 20
+ 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: 
+================================================================================ 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: SEMESTER: TEIT 7th Semester 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: ================================================================================ 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: Total Assignments: 4
+ 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: [THY] ITC701               | AI and DS - II                      | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: [THY] ITC702               | Internet of Everything              | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: [THY] ITDO7013             | Department Optional Course - 3 : Infrastructure Security | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: [THY] ITDO7024             | Department Optional Course - 4 : Information Retrieval System | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: 
+-------------------------------------------------------------------------------- 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: SUMMARY for TEIT 7th Semester: 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]:   Theory periods: 12 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]:   Lab periods: 0 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]:   TOTAL PERIODS: 12 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]:   Available time slots: 40 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: 
+================================================================================ 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: SEMESTER: TEIT 3rd Semester 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: ================================================================================ 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: Total Assignments: 8
+ 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: [THY] 2343111              | Applied Mathematics Thinking        | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: [THY] 2343112              | Advance Data Structure & Analysis   | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: [THY] 2343113              | Database Management System & Application | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.752Z] [INFO] [AssignmentDiagnostic]: [THY] 2343114              | Automata Theory                     | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] OEC301               | Open Elective-Web Designing with Word Press | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] 2343611              | Mini Project- Full Stack Java Programming | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] 2993511              | Entrepreneurship Development        | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] 2993512              | Environmental Science               | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: 
+-------------------------------------------------------------------------------- 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: SUMMARY for TEIT 3rd Semester: 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]:   Theory periods: 24 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]:   Lab periods: 0 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]:   TOTAL PERIODS: 24 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]:   Available time slots: 40 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: 
+================================================================================ 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: SEMESTER: TEIT 5th Semester 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: ================================================================================ 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: Total Assignments: 8
+ 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] 2345111              | Software Engineering and Agile Practices | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] 2345112              | Artificial Intelligence and Machine Learning | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] 2345113              | Web Technology                      | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] 23451142             | PEC-1 Advanced Database Technologies | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] MDC501               | Multidisciplinary Minor (Wireless & MComm) | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] MDC501               | Multidisciplinary Minor (Wireless & MComm) | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] OEC501               | Open Elective - GENERATIVE AI       | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: [THY] 2345511              | India Knowledge System - 2          | UNKNOWN                   | 3 periods 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: 
+-------------------------------------------------------------------------------- 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: SUMMARY for TEIT 5th Semester: 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]:   Theory periods: 24 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]:   Lab periods: 0 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]:   TOTAL PERIODS: 24 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]:   Available time slots: 40 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: 
+================================================================================ 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: OVERALL ANALYSIS: 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]:   Total periods across all semesters: 60 
+[2026-08-25T18:21:54.753Z] [INFO] [AssignmentDiagnostic]: ================================================================================
+ 
+

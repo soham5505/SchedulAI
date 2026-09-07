@@ -1,0 +1,88 @@
+﻿[2026-08-25T18:23:26.264Z] [INFO] [DumpGeneratorPayload]: Connected to MongoDB 
+[2026-08-25T18:23:26.297Z] [INFO] [DumpGeneratorPayload]: Found semester IDs with assignments: 6a8dce19fcb5807b1a4ead83, 6a8dce19fcb5807b1a4ead81, 6a8dce19fcb5807b1a4ead82 
+node.exe : [2026-08-2
+5T18:23:26.325Z] 
+[ERROR] [DumpGenerato
+rPayload]: Dumping 
+payload failed: 
+MissingSchemaError: 
+Schema hasn't been 
+registered for model 
+"Teacher".
+At line:1 char:1
++ & "C:\Program Files
+\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: ([2026-0   
+ 8-25T18:...odel     
+"Teacher".:Strin    
+g) [], RemoteExc    
+eption
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+Use 
+mongoose.model(name, 
+schema)
+    at NativeConnecti
+on.model (D:\SchedulA
+I\apps\api\node_modul
+es\mongoose\lib\conne
+ction.js:1497:13)
+    at 
+_getModelFromConn (D:
+\SchedulAI\apps\api\n
+ode_modules\mongoose\
+lib\helpers\populate\
+getModelsMapForPopula
+te.js:579:15)
+    at 
+addModelNamesToMap (D
+:\SchedulAI\apps\api\
+node_modules\mongoose
+\lib\helpers\populate
+\getModelsMapForPopul
+ate.js:507:17)
+    at getModelsMapFo
+rPopulate (D:\Schedul
+AI\apps\api\node_modu
+les\mongoose\lib\help
+ers\populate\getModel
+sMapForPopulate.js:20
+8:7)
+    at _populatePath 
+(D:\SchedulAI\apps\ap
+i\node_modules\mongoo
+se\lib\model.js:4492:
+21)
+    at 
+Function.populate (D:
+\SchedulAI\apps\api\n
+ode_modules\mongoose\
+lib\model.js:4459:21)
+    at 
+model.Query._find (D:
+\SchedulAI\apps\api\n
+ode_modules\mongoose\
+lib\query.js:2452:23)
+    at process.proces
+sTicksAndRejections (
+node:internal/process
+/task_queues:105:5)
+    at async 
+model.Query.exec (D:\
+SchedulAI\apps\api\no
+de_modules\mongoose\l
+ib\query.js:4622:63)
+    at async 
+Promise.all (index 3)
+
