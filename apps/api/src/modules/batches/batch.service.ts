@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { BatchModel } from '../../models/batch.model.js';
 import { SemesterModel } from '../../models/semester.model.js';
 import { TeachingAssignmentModel } from '../../models/assignment.model.js';
@@ -11,7 +12,13 @@ export class BatchService {
     const limit = Math.min(100, Math.max(1, Number(params.limit) || 20));
     const filter: Record<string, unknown> = {};
 
-    if (params.semesterId) filter.semesterId = params.semesterId;
+    if (params.semesterId) {
+      const semesterId = String(params.semesterId);
+      if (!mongoose.isValidObjectId(semesterId)) {
+        throw new ApiError('Invalid semesterId', 400, ERROR_CODES.BAD_REQUEST);
+      }
+      filter.semesterId = new mongoose.Types.ObjectId(semesterId);
+    }
     if (params.search) filter.code = { $regex: params.search, $options: 'i' };
     if (typeof params.isActive === 'boolean') filter.isActive = params.isActive;
 

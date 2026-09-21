@@ -489,6 +489,7 @@ export class GenerationService {
     // Clone entries to the new generation
     const clonedEntries = entries.map((e) => ({
       semesterId: e.semesterId,
+      ...(e.batchId ? { batchId: e.batchId } : {}),
       subjectId: e.subjectId,
       teacherId: e.teacherId,
       classroomId: e.classroomId,

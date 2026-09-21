@@ -221,7 +221,7 @@ export const CreateTeachingAssignmentSchema = z.object({
   teacherId: MongoIdSchema,
   subjectId: MongoIdSchema,
   semesterId: MongoIdSchema,
-  batchId: MongoIdSchema.optional(),
+  batchId: MongoIdSchema.nullable().optional(),
   classroomId: MongoIdSchema.optional(),
   classroomRequirements: z.array(z.string()).default([]),
   periodsPerWeek: z.number().int().min(1).max(20).default(4),

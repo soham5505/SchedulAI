@@ -58,17 +58,25 @@ export const AssignmentsPage: React.FC = () => {
     },
   });
 
-  // Dynamic batch list — keyed on the form's selected semesterId
-  const { data: batchesForSemester = [] } = useQuery<IBatch[]>({
-    queryKey: ['batches-form', semesterId],
+  // Load all batches and filter by the selected semester on the client.
+  // This keeps the picker working even when an older API instance has a broken
+  // semesterId query filter.
+  const { data: allBatches = [] } = useQuery<IBatch[]>({
+    queryKey: ['batches-form'],
     queryFn: async () => {
-      if (!semesterId) return [];
       const res = await apiClient.get<{ success: boolean; data: IBatch[] }>(
-        `/batches?semesterId=${semesterId}&limit=100`
+        '/batches?limit=100'
       );
       return res.data.data;
     },
-    enabled: !!semesterId,
+  });
+
+  const batchesForSemester = allBatches.filter((batch) => {
+    const batchSemesterId =
+      typeof batch.semesterId === 'string'
+        ? batch.semesterId
+        : batch.semesterId?._id;
+    return batchSemesterId === semesterId;
   });
 
   const { data, isLoading } = useQuery<{ assignments: ITeachingAssignment[]; meta: PaginationMeta }>({

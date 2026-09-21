@@ -62,7 +62,7 @@ describe('BatchService', () => {
     const result = await batchService.getAll({ semesterId: String(semesterOne), page: 1, limit: 20 });
     expect(result.batches).toHaveLength(2);
     expect(result.meta.total).toBe(2);
-    expect(BatchModel.find).toHaveBeenCalledWith(expect.objectContaining({ semesterId: String(semesterOne) }));
+    expect(BatchModel.find).toHaveBeenCalledWith(expect.objectContaining({ semesterId: semesterOne }));
   });
 
   it('updates a batch and prevents unsafe deletion', async () => {
