@@ -58,9 +58,31 @@ class TimetableSolver:
     def _student_scope(batch_id: Optional[str]) -> str:
         return batch_id or "ALL"
 
+    def _batch_student_sum(self, semester_id: str) -> int:
+        """Sum of studentCount for all batches belonging to *semester_id*.
+        Returns 0 if no batches are associated with the semester."""
+        return sum(
+            b.studentCount
+            for b in self.batches.values()
+            if b.semesterId == semester_id
+        )
+
     def _student_count(self, assignment: AssignmentInput) -> int:
+        """Return the number of students who will attend this assignment.
+
+        - Batch-specific assignment (batchId is set): return the batch's own
+          studentCount, since only that batch attends.
+        - Whole-semester lecture (batchId is None/NULL): the entire semester
+          attends together.  If the semester has explicit batches, return the
+          **sum** of their studentCounts (e.g. B1+B2+B3+B4 = 4×20 = 80).
+          Fall back to semester.studentCount when no batches are registered.
+        """
         if assignment.batchId and assignment.batchId in self.batches:
             return self.batches[assignment.batchId].studentCount
+        # Whole-semester lecture: count students across all batches
+        total_from_batches = self._batch_student_sum(assignment.semesterId)
+        if total_from_batches > 0:
+            return total_from_batches
         semester = self.semesters.get(assignment.semesterId)
         return semester.studentCount if semester else 0
 
@@ -360,8 +382,10 @@ class TimetableSolver:
                     if day_vars:
                         model.Add(sum(day_vars) <= teacher.maxClassesPerDay)
 
-                # Weekly limit - only enforce if source data explicitly defined it
-                if getattr(teacher, 'isMaxWeeklySourceDefined', True):  # Default to True for backwards compatibility
+                # Weekly limit - only enforce if source data explicitly defined it.
+                # Default is False: the API sends isMaxWeeklySourceDefined=false for all
+                # teachers unless overridden, so we must not enforce the UI default.
+                if getattr(teacher, 'isMaxWeeklySourceDefined', False):
                     all_teacher_vars = []
                     for a in self.assignments:
                         if a.teacherId == teacher.id:
@@ -588,8 +612,10 @@ class TimetableSolver:
                     entityId=t_id,
                     details={"assigned": demand, "available": available_slots_for_teacher}
                 ))
-            # Only check weekly limit if source data defines it
-            is_source_defined = getattr(teacher, 'isMaxWeeklySourceDefined', True)  # Default to True for backwards compatibility
+            # Only check weekly limit if source data explicitly defines it.
+            # Default is False so that UI-default maxClassesPerWeek values
+            # do not block valid schedules for teachers with many batch assignments.
+            is_source_defined = getattr(teacher, 'isMaxWeeklySourceDefined', False)
             if is_source_defined and demand > teacher.maxClassesPerWeek:
                 violations.append(ViolationOutput(
                     type="TEACHER_WEEKLY_LIMIT_EXCEEDED",

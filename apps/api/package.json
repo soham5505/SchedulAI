@@ -19,8 +19,10 @@
     "test:batch-detection": "tsx src/scripts/test-batch-detection.ts",
     "diagnostic:assignments": "tsx src/scripts/diagnostic-assignments.ts",
     "migrate:001-create-batches": "tsx src/scripts/migrations/001-create-batches.ts",
-    "migrate:002-add-batch-references": "tsx src/scripts/migrations/002-add-batch-references.ts"
-    ,"migrate:003-batch-aware-assignment-index": "tsx src/scripts/migrations/003-batch-aware-assignment-index.ts"
+    "migrate:002-add-batch-references": "tsx src/scripts/migrations/002-add-batch-references.ts",
+    "migrate:003-batch-aware-assignment-index": "tsx src/scripts/migrations/003-batch-aware-assignment-index.ts",
+    "migrate:004-repair-stale-references": "cross-env DRY_RUN=false tsx src/scripts/migrations/004-repair-stale-references.ts",
+    "repair:dry-run": "cross-env DRY_RUN=true tsx src/scripts/migrations/004-repair-stale-references.ts"
   },
   "dependencies": {
     "@schedulai/config": "*",
@@ -48,6 +50,7 @@
     "@types/multer": "^1.4.11",
     "@types/node": "^20.14.2",
     "@types/supertest": "^6.0.2",
+    "cross-env": "^10.1.0",
     "mongodb-memory-server": "^9.2.0",
     "supertest": "^7.0.0",
     "tsx": "^4.11.0",

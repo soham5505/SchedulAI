@@ -20,6 +20,12 @@ class TimetableValidator:
         self.batches = {b.id: b for b in request.batches}
         self.timeslots = {ts.id: ts for ts in request.timeslots}
         self.assignments = request.teachingAssignments
+        # Pre-compute sum of batch students per semester (for lecture capacity checks)
+        self._sem_batch_student_sum: Dict[str, int] = {}
+        for b in request.batches:
+            self._sem_batch_student_sum[b.semesterId] = (
+                self._sem_batch_student_sum.get(b.semesterId, 0) + b.studentCount
+            )
 
     def validate(self) -> ValidateResponse:
         violations: List[ViolationOutput] = []
@@ -74,7 +80,14 @@ class TimetableValidator:
             classroom = self.classrooms.get(entry.classroomId)
             semester = self.semesters.get(entry.semesterId)
             if classroom and semester:
-                student_count = self.batches.get(entry.batchId).studentCount if entry.batchId in self.batches else semester.studentCount
+                if entry.batchId and entry.batchId in self.batches:
+                    # Batch-specific: only that batch attends
+                    student_count = self.batches[entry.batchId].studentCount
+                else:
+                    # Whole-semester lecture: count all batches in the semester,
+                    # or fall back to semester.studentCount if no batches defined.
+                    sem_batch_sum = self._sem_batch_student_sum.get(entry.semesterId, 0)
+                    student_count = sem_batch_sum if sem_batch_sum > 0 else semester.studentCount
                 if classroom.capacity < student_count:
                     violations.append(ViolationOutput(
                         type="CLASSROOM_CAPACITY_EXCEEDED",

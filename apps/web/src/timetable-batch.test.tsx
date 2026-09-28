@@ -22,15 +22,24 @@ interface MiniCardProps {
 }
 
 const MiniTimetableCard: React.FC<MiniCardProps> = ({ entry }) => {
-    const subject = entry.subjectId as unknown as { name?: string };
+    const subject = entry.subjectId as unknown as { name?: string; isLab?: boolean };
     const teacher = entry.teacherId as unknown as { name?: string };
     const classroom = entry.classroomId as unknown as { building?: string; roomNumber?: string };
     const batch = entry.batchId as unknown as { code?: string } | null | undefined;
-    const batchLabel = batch?.code ?? 'ALL';
+
+    // Mirror the real TimetableCard logic: canonical field is periodType,
+    // with subject.isLab as fallback. Fully data-driven — no hard-coded names.
+    const isLab = entry.periodType === 'LAB' || Boolean(subject?.isLab);
+    const isTheory = !isLab;
+
+    // Theory → ALL STUDENTS; Lab → batch code or ALL (for whole-class lab)
+    const batchLabel = isTheory ? 'ALL STUDENTS' : (batch?.code ?? 'ALL');
 
     return (
         <div data-testid="timetable-card">
             <span data-testid="subject">{subject?.name ?? 'Subject'}</span>
+            {isLab && <span data-testid="badge-lab">LAB</span>}
+            {isTheory && <span data-testid="badge-theory">THEORY</span>}
             <span data-testid="batch">{batchLabel}</span>
             <span data-testid="teacher">{teacher?.name ?? 'Teacher'}</span>
             <span data-testid="room">
@@ -83,22 +92,24 @@ function makeBatch(code: string, semId = 'sem-1'): IBatch {
 describe('TimetableCard — batch display', () => {
     it('shows the batch code when batchId is a populated object', () => {
         const batch = makeBatch('GRP-A');
-        const entry = makeEntry({ batchId: batch as unknown as string });
+        // A LAB entry has a specific batch: must show batch code, not ALL STUDENTS
+        const entry = makeEntry({ periodType: 'LAB', batchId: batch as unknown as string });
         render(<MiniTimetableCard entry={entry} />);
         expect(screen.getByTestId('batch').textContent).toBe('GRP-A');
     });
 
-    it('shows ALL when batchId is null (whole-class assignment)', () => {
-        const entry = makeEntry({ batchId: null });
+    it('shows ALL STUDENTS when batchId is null (theory/whole-class assignment)', () => {
+        // A theory entry (periodType=LECTURE, batchId=null) shows ALL STUDENTS
+        const entry = makeEntry({ periodType: 'LECTURE', batchId: null });
         render(<MiniTimetableCard entry={entry} />);
-        expect(screen.getByTestId('batch').textContent).toBe('ALL');
+        expect(screen.getByTestId('batch').textContent).toBe('ALL STUDENTS');
     });
 
-    it('shows ALL when batchId is undefined (legacy entry — no batch field)', () => {
-        const entry = makeEntry();
+    it('shows ALL STUDENTS when batchId is undefined (legacy theory entry — no batch field)', () => {
+        const entry = makeEntry({ periodType: 'LECTURE' });
         delete (entry as unknown as Record<string, unknown>)['batchId'];
         render(<MiniTimetableCard entry={entry} />);
-        expect(screen.getByTestId('batch').textContent).toBe('ALL');
+        expect(screen.getByTestId('batch').textContent).toBe('ALL STUDENTS');
     });
 
     it('shows subject name correctly', () => {
@@ -125,6 +136,7 @@ describe('TimetableCard — batch display', () => {
 
         const entryOne = makeEntry({
             _id: 'e1',
+            periodType: 'LAB',    // lab entry → show batch code
             batchId: batchOne as unknown as string,
             teacherId: { _id: 'tch-1', name: 'Faculty Alpha' } as unknown as string,
             classroomId: { _id: 'room-1', building: 'Block X', roomNumber: '101', name: 'Lab 1' } as unknown as string,
@@ -132,6 +144,7 @@ describe('TimetableCard — batch display', () => {
 
         const entryTwo = makeEntry({
             _id: 'e2',
+            periodType: 'LAB',    // lab entry → show batch code
             batchId: batchTwo as unknown as string,
             teacherId: { _id: 'tch-2', name: 'Faculty Beta' } as unknown as string,
             classroomId: { _id: 'room-2', building: 'Block Y', roomNumber: '202', name: 'Lab 2' } as unknown as string,
@@ -150,8 +163,8 @@ describe('TimetableCard — batch display', () => {
 
     it('does not crash for an unknown or future batch code', () => {
         const futureBatch = makeBatch('FUTURE-BATCH-99');
-        const entry = makeEntry({ batchId: futureBatch as unknown as string });
-        // Should render without throwing
+        // LAB entry with unknown batch — should render batch code without crashing
+        const entry = makeEntry({ periodType: 'LAB', batchId: futureBatch as unknown as string });
         expect(() => render(<MiniTimetableCard entry={entry} />)).not.toThrow();
         expect(screen.getByTestId('batch').textContent).toBe('FUTURE-BATCH-99');
     });
@@ -213,5 +226,79 @@ describe('Batch filter logic', () => {
         delete (legacyEntry as unknown as Record<string, unknown>)['batchId'];
         const result = applyBatchFilter([legacyEntry, entryAlpha], batchAlpha._id);
         expect(result.find((e) => e._id === 'eLegacy')).toBeDefined();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// PART C — THEORY vs LAB badge display
+// Tests that MiniTimetableCard (and by extension the real TimetableCard)
+// correctly shows THEORY or LAB based on periodType / subject.isLab.
+// Generic — no hard-coded subject or teacher names.
+// ---------------------------------------------------------------------------
+
+describe('TimetableCard — THEORY vs LAB badge display', () => {
+    it('shows THEORY badge for a LECTURE-type entry (batchId=null)', () => {
+        const entry = makeEntry({ periodType: 'LECTURE', batchId: null });
+        render(<MiniTimetableCard entry={entry} />);
+        expect(screen.getByTestId('badge-theory').textContent).toBe('THEORY');
+        expect(screen.queryByTestId('badge-lab')).toBeNull();
+    });
+
+    it('shows LAB badge for a LAB-type entry', () => {
+        const batch = makeBatch('GRP-1');
+        const entry = makeEntry({
+            periodType: 'LAB',
+            batchId: batch as unknown as string,
+        });
+        render(<MiniTimetableCard entry={entry} />);
+        expect(screen.getByTestId('badge-lab').textContent).toBe('LAB');
+        expect(screen.queryByTestId('badge-theory')).toBeNull();
+    });
+
+    it('shows ALL STUDENTS as batch label for theory entries', () => {
+        const entry = makeEntry({ periodType: 'LECTURE', batchId: null });
+        render(<MiniTimetableCard entry={entry} />);
+        expect(screen.getByTestId('batch').textContent).toBe('ALL STUDENTS');
+    });
+
+    it('shows batch code as batch label for lab entries', () => {
+        const batch = makeBatch('B2');
+        const entry = makeEntry({
+            periodType: 'LAB',
+            batchId: batch as unknown as string,
+        });
+        render(<MiniTimetableCard entry={entry} />);
+        expect(screen.getByTestId('batch').textContent).toBe('B2');
+    });
+
+    it('does NOT show THEORY + B1 combination (theory always shows ALL STUDENTS)', () => {
+        // Theory entry where batchId was incorrectly set (legacy data safety check)
+        // The card should still show ALL STUDENTS, ignoring any batchId for theory
+        const batch = makeBatch('B1');
+        const entry = makeEntry({
+            periodType: 'LECTURE',   // theory
+            batchId: batch as unknown as string,  // invalid legacy batchId
+        });
+        render(<MiniTimetableCard entry={entry} />);
+        // THEORY badge must show
+        expect(screen.getByTestId('badge-theory').textContent).toBe('THEORY');
+        // LAB badge must NOT show
+        expect(screen.queryByTestId('badge-lab')).toBeNull();
+        // Batch label must show ALL STUDENTS (not B1)
+        expect(screen.getByTestId('batch').textContent).toBe('ALL STUDENTS');
+    });
+
+    it('shows LAB + batch code for a lab entry with a specific batch (any code)', () => {
+        // Generic test — uses an arbitrary batch code, not B1/B2/B3/B4 specifically
+        const batch = makeBatch('CUSTOM-BATCH-X');
+        const entry = makeEntry({
+            periodType: 'LAB',
+            batchId: batch as unknown as string,
+            subjectId: { _id: 'sub-lab', name: 'Custom Lab Subject', isLab: true } as unknown as string,
+        });
+        render(<MiniTimetableCard entry={entry} />);
+        expect(screen.getByTestId('badge-lab').textContent).toBe('LAB');
+        expect(screen.getByTestId('batch').textContent).toBe('CUSTOM-BATCH-X');
+        expect(screen.queryByTestId('badge-theory')).toBeNull();
     });
 });

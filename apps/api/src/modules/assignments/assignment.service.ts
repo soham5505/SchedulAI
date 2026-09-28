@@ -7,6 +7,31 @@ import { QueryParams } from '@schedulai/shared-types';
 
 export class AssignmentService {
   /**
+   * RULE: Theory assignments (isLab = false) must NEVER carry a batchId.
+   * A theory lecture is always for the entire semester (ALL students).
+   * Enforced server-side so no frontend bypass is possible.
+   * This rule is data-driven and generic — it applies to every teacher,
+   * subject, batch, and semester without any hard-coded names.
+   */
+  private validateTheoryBatch(isLab: unknown, batchId: unknown) {
+    const isLabBool = Boolean(isLab);
+    const hasBatch =
+      batchId !== undefined &&
+      batchId !== null &&
+      batchId !== '';
+
+    if (!isLabBool && hasBatch) {
+      throw new ApiError(
+        'Theory assignments must not have a batch. '
+        + 'A theory lecture is for the whole class (ALL students). '
+        + 'Set "Lab Practical" to true for batch-specific lab assignments.',
+        400,
+        ERROR_CODES.BAD_REQUEST
+      );
+    }
+  }
+
+  /**
    * Validate that a batch exists and belongs to the selected semester.
    *
    * Important:
@@ -51,30 +76,23 @@ export class AssignmentService {
     const batchObjectId = new mongoose.Types.ObjectId(batchIdString);
     const semesterObjectId = new mongoose.Types.ObjectId(semesterIdString);
 
-    // First find the batch using its actual _id.
-    const batch = await BatchModel.findById(batchObjectId).lean();
+    // Atomically verify the batch exists AND belongs to the selected semester.
+    // Using findOne({ _id, semesterId }) means:
+    //   - If the batch does not exist → null → 400 (bad request: invalid input)
+    //   - If the batch exists but belongs to another semester → null → 400
+    // Both cases are invalid client input, so HTTP 400 is the correct status.
+    const batch = await BatchModel.findOne({
+      _id: batchObjectId,
+      semesterId: semesterObjectId,
+    }).lean();
 
     if (!batch) {
       throw new ApiError(
-        `Batch not found: ${batchIdString}`,
-        404,
-        ERROR_CODES.RESOURCE_NOT_FOUND
-      );
-    }
-
-    // Explicitly compare the semester IDs.
-    const batchSemesterId = String(batch.semesterId);
-
-    if (batchSemesterId !== semesterIdString) {
-      throw new ApiError(
-        `Batch ${batch.code} belongs to semester ${batchSemesterId}, not ${semesterIdString}`,
+        `Batch not found or does not belong to semester ${semesterIdString}`,
         400,
         ERROR_CODES.BAD_REQUEST
       );
     }
-
-    // Keep the ObjectId conversion here so the values are known-good.
-    void semesterObjectId;
   }
 
   async getAll(params: QueryParams) {
@@ -189,11 +207,16 @@ export class AssignmentService {
   }
 
   async create(data: Record<string, unknown>) {
+    // Rule 1: Theory cannot have a batch (generic — not tied to any name).
+    this.validateTheoryBatch(data.isLab, data.batchId);
+
+    // Rule 2: If a batch IS provided it must belong to the selected semester.
     await this.validateBatch(
       data.semesterId,
       data.batchId
     );
 
+    // For theory: ensure batchId is stored as null, never as empty string.
     const batchId = data.batchId ?? null;
 
     const existing = await TeachingAssignmentModel.findOne({
@@ -204,8 +227,9 @@ export class AssignmentService {
     });
 
     if (existing) {
+      const batchInfo = batchId ? ` for batch` : ' (whole class)';
       throw new ApiError(
-        'This teacher is already assigned to this subject and semester',
+        `Duplicate assignment: this teacher is already assigned to this subject in this semester${batchInfo}. Use a different teacher or a different batch.`,
         409,
         ERROR_CODES.CONFLICT
       );
@@ -235,11 +259,18 @@ export class AssignmentService {
     const nextSemesterId =
       data.semesterId ?? assignment.semesterId;
 
+    const nextIsLab =
+      data.isLab !== undefined ? data.isLab : assignment.isLab;
+
     const nextBatchId =
       data.batchId !== undefined
         ? data.batchId
         : assignment.batchId;
 
+    // Rule 1: Theory cannot have a batch (generic — not tied to any name).
+    this.validateTheoryBatch(nextIsLab, nextBatchId);
+
+    // Rule 2: If a batch IS provided it must belong to the selected semester.
     await this.validateBatch(
       nextSemesterId,
       nextBatchId

@@ -21,6 +21,7 @@ import {
   PeriodType,
 } from '@schedulai/shared-types';
 import { Logger } from '../../utils/logger.js';
+import { preFlightValidator, PreFlightContext } from './pre-flight-validator.js';
 
 const logger = new Logger('GenerationService');
 
@@ -182,6 +183,7 @@ export class GenerationService {
       TeachingAssignmentModel.find({ semesterId: { $in: semesterObjectIds } })
         .populate('teacherId')
         .populate('subjectId')
+        .populate('classroomId')
         .lean(),
       BatchModel.find({ semesterId: { $in: semesterObjectIds }, isActive: true }).lean(),
     ]);
@@ -226,6 +228,16 @@ export class GenerationService {
     const teachers = Array.from(teacherMap.values());
     const subjects = Array.from(subjectMap.values());
 
+    const teacherPeriods = new Map<string, number>();
+    for (const assignment of assignments) {
+      const teacher = assignment.teacherId as unknown as Record<string, unknown>;
+      const teacherId = String(teacher._id);
+      teacherPeriods.set(
+        teacherId,
+        (teacherPeriods.get(teacherId) || 0) + Number(assignment.periodsPerWeek || 0)
+      );
+    }
+
     // Compute latest version number for these semesters
     const latestGen = await GenerationModel.findOne({
       semesterIds: { $in: data.semesterIds },
@@ -246,6 +258,99 @@ export class GenerationService {
       version: nextVersion,
     });
 
+    // ── Pre-flight data-integrity check ────────────────────────────────────
+    // Build context from the data we already fetched and run the validator
+    // BEFORE constructing the scheduler payload.  This catches stale teacher
+    // or classroom references early with a clear diagnostic message, instead
+    // of forwarding corrupt data to the solver which would just say "INFEASIBLE".
+    {
+      const validTeacherIds = new Set(
+        (await TeacherModel.find({}, '_id').lean()).map((t) => t._id.toString())
+      );
+      const validSubjectIds = new Set(
+        Array.from(subjectMap.keys())
+      );
+      const availableClassroomIds = new Set(
+        classrooms.map((c) => c._id.toString())
+      );
+
+      // Build semesterId -> total batch students map
+      const semesterBatchStudentSum = new Map<string, number>();
+      for (const b of batches) {
+        const sid = b.semesterId.toString();
+        semesterBatchStudentSum.set(sid, (semesterBatchStudentSum.get(sid) ?? 0) + b.studentCount);
+      }
+
+      // Max capacity of any available non-lab lecture room
+      const maxLectureRoomCapacity = classrooms
+        .filter((c) => !c.isLab)
+        .reduce((max, c) => Math.max(max, c.capacity), 0);
+
+      const classroomCapacityMap = new Map<string, number>(
+        classrooms.map((c) => [c._id.toString(), c.capacity])
+      );
+
+      const preFlightCtx: PreFlightContext = {
+        assignments: assignments as Array<Record<string, unknown>>,
+        validTeacherIds,
+        validSubjectIds,
+        validSemesterIds: semesterIdSet,
+        validBatchIds: batchIdSet,
+        availableClassroomIds,
+        semesterBatchStudentSum,
+        maxLectureRoomCapacity,
+        classroomCapacityMap,
+        enforceClassroomCapacity: (data.hardConstraints?.enforceClassroomCapacity ?? DEFAULT_HARD_CONSTRAINTS.enforceClassroomCapacity) as boolean,
+      };
+
+      const preFlightResult = preFlightValidator.validate(preFlightCtx);
+
+      if (preFlightResult.warnings.length > 0) {
+        logger.warn(
+          `Pre-flight warnings (${preFlightResult.warnings.length}): ` +
+          preFlightResult.warnings.map((w) => `[${w.assignmentId}] ${w.problem}`).join(' | ')
+        );
+      }
+
+      if (!preFlightResult.ok) {
+        const report = preFlightValidator.formatReport(preFlightResult);
+        logger.error('Pre-flight check FAILED — aborting generation');
+        logger.error(report);
+
+        // Mark generation as FAILED with the diagnostic report
+        generation.status = 'FAILED';
+        generation.completedAt = new Date();
+        generation.errorMessage =
+          `DATA INTEGRITY ERROR: ${preFlightResult.errors.length} assignment(s) have stale or invalid references. ` +
+          preFlightResult.errors.map((e) => `[${e.assignmentId}] ${e.field}: ${e.problem}`).join(' | ');
+        generation.violations = preFlightResult.errors.map((e) => ({
+          type: 'DATA_INTEGRITY_ERROR',
+          severity: 'ERROR',
+          message: `Assignment ${e.assignmentId} — ${e.field}: ${e.problem}`,
+          details: { action: e.action },
+        }));
+        await generation.save();
+
+        return {
+          generation: generation.toJSON(),
+          timetable: [],
+          score: 0,
+          violations: preFlightResult.errors.map((e) => ({
+            type: 'DATA_INTEGRITY_ERROR',
+            severity: 'ERROR',
+            message: `Assignment ${e.assignmentId} — ${e.field}: ${e.problem}`,
+            details: { action: e.action },
+          })),
+          errorMessage: generation.errorMessage,
+        };
+      }
+
+      logger.info(
+        `Pre-flight check PASSED: ${preFlightResult.summary.validAssignments}/${preFlightResult.summary.totalAssignments} assignments are valid`
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Format scheduler payload
     const schedulerPayload: ISchedulerInput = {
       teachers: teachers.map((t) => ({
@@ -254,7 +359,13 @@ export class GenerationService {
         availability: (t.availability as DayOfWeek[]) || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
         preferredTimeSlots: ((t.preferredTimeSlots as Array<unknown>) || []).map((id) => String(id)),
         unavailableTimeSlots: ((t.unavailableTimeSlots as Array<unknown>) || []).map((id) => String(id)),
-        maxClassesPerDay: Number(t.maxClassesPerDay) || 4,
+        maxClassesPerDay: Math.max(
+          Number(t.maxClassesPerDay) || 4,
+          Math.ceil(
+            (teacherPeriods.get(String(t._id)) || 0) /
+              Math.max(new Set((t.availability as Array<unknown>) || []).size, 1)
+          )
+        ),
         maxClassesPerWeek: Number(t.maxClassesPerWeek) || 20,
         isMaxWeeklySourceDefined: false, // By default, treat as not source-defined (from import/allocations)
       })),

@@ -95,7 +95,9 @@ export const AssignmentsPage: React.FC = () => {
         teacherId,
         subjectId,
         semesterId,
-        batchId: batchId || null, // empty string → null (whole class)
+        // Theory assignments MUST have batchId=null (whole class).
+        // This is enforced here AND validated server-side.
+        batchId: isLab ? (batchId || null) : null,
         periodsPerWeek: Number(periodsPerWeek),
         isLab,
       };
@@ -322,14 +324,20 @@ export const AssignmentsPage: React.FC = () => {
             required
           />
 
-          {/* Dynamic batch picker — options come from the selected semester */}
+          {/* Dynamic batch picker — options come from the selected semester.
+              THEORY: disabled, forced to null (whole class).
+              LAB:    enabled, user may select a specific batch. */}
           <Select
             label="Batch / Division"
-            value={batchId}
+            value={isLab ? batchId : ''}
             onChange={(e) => setBatchId(e.target.value)}
+            disabled={!isLab}
             options={[
-              { value: '', label: 'Whole Class (ALL)' },
-              ...batchesForSemester.map((b) => ({ value: b._id, label: b.code })),
+              {
+                value: '',
+                label: isLab ? 'Whole Class (ALL)' : 'N/A (Theory — whole class only)',
+              },
+              ...(isLab ? batchesForSemester.map((b) => ({ value: b._id, label: b.code })) : []),
             ]}
           />
 
@@ -347,7 +355,12 @@ export const AssignmentsPage: React.FC = () => {
             <input
               type="checkbox"
               checked={isLab}
-              onChange={(e) => setIsLab(e.target.checked)}
+              onChange={(e) => {
+                setIsLab(e.target.checked);
+                // When switching from Lab → Theory, clear the batch selection
+                // because theory is always for the whole class (ALL students).
+                if (!e.target.checked) setBatchId('');
+              }}
               className="w-4 h-4 accent-teal-500 rounded cursor-pointer"
             />
             <span>This assignment requires laboratory facilities (Lab Practical)</span>

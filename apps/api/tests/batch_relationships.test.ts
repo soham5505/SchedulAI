@@ -53,25 +53,25 @@ describe('batch relationships on assignments and timetable entries', () => {
     vi.spyOn(TeachingAssignmentModel, 'findOne').mockResolvedValue(null);
     vi.spyOn(TeachingAssignmentModel, 'create').mockResolvedValue(assignment as never);
 
-    const result = await assignmentService.create({ semesterId, batchId: id, teacherId: 'teacher', subjectId: 'subject' });
+    const result = await assignmentService.create({ semesterId, batchId: id, isLab: true, teacherId: 'teacher', subjectId: 'subject' });
     expect(result.batchId).toBe(id);
   });
 
   it('rejects an invalid batch reference', async () => {
     batchLookup(null);
-    await expect(assignmentService.create({ semesterId, batchId: new mongoose.Types.ObjectId(), teacherId: 'teacher', subjectId: 'subject' })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(assignmentService.create({ semesterId, batchId: new mongoose.Types.ObjectId(), isLab: true, teacherId: 'teacher', subjectId: 'subject' })).rejects.toMatchObject({ statusCode: 400 });
   });
 
   it('rejects a batch belonging to another semester', async () => {
     batchLookup(null);
     vi.spyOn(TeachingAssignmentModel, 'findOne').mockResolvedValue(null);
-    await expect(assignmentService.create({ semesterId, batchId: batchB1, teacherId: 'teacher', subjectId: 'subject' })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(assignmentService.create({ semesterId, batchId: batchB1, isLab: true, teacherId: 'teacher', subjectId: 'subject' })).rejects.toMatchObject({ statusCode: 400 });
   });
 
   it('preserves the existing duplicate assignment behavior', async () => {
     batchLookup({ _id: batchB1, semesterId });
     vi.spyOn(TeachingAssignmentModel, 'findOne').mockResolvedValue({ _id: new mongoose.Types.ObjectId() } as never);
-    await expect(assignmentService.create({ semesterId, batchId: batchB1, teacherId: 'teacher', subjectId: 'subject' })).rejects.toMatchObject({ statusCode: 409 });
+    await expect(assignmentService.create({ semesterId, batchId: batchB1, isLab: true, teacherId: 'teacher', subjectId: 'subject' })).rejects.toMatchObject({ statusCode: 409 });
   });
 
   it('keeps legacy timetable entries without a batch', async () => {
