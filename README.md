@@ -105,7 +105,7 @@ Access services:
 
 ## 📚 Documentation
 
-Detailed documentation is available in the `docs/` directory:
+- 📖 **[Master Project Documentation (Single Source of Truth)](MASTER_PROJECT_DOCUMENTATION.md)** — Exhaustive specification covering full system architecture, OR-Tools CP-SAT mathematical model, complete data schemas, REST API catalog, workflows, and templates for generating project reports, SRS, SDD, and user manuals.
 - [System Architecture & Solver Formulation](docs/ARCHITECTURE.md)
 - [REST API Reference](docs/API.md)
 - [Production Deployment Guide](docs/DEPLOYMENT.md)
