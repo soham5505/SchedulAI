@@ -13,6 +13,7 @@ import {
   GraduationCap,
   Clock,
   Link as LinkIcon,
+  Lock,
   Upload,
   Download,
   ShieldAlert,
@@ -67,6 +68,7 @@ export const AppLayout: React.FC = () => {
         { label: 'Semesters & Batches', path: '/semesters', icon: GraduationCap },
         { label: 'Time Slots', path: '/timeslots', icon: Clock },
         { label: 'Teaching Assignments', path: '/assignments', icon: LinkIcon },
+        { label: 'Lab Reservations', path: '/lab-reservations', icon: Lock },
       ],
     },
     {

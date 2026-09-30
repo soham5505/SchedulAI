@@ -178,6 +178,19 @@ export const GeneratePage: React.FC = () => {
     },
   });
 
+  const syncScheduleMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post('/timeslots/bulk-standard');
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Monday-Saturday reference schedule applied (42 teaching slots)!');
+    },
+    onError: (err) => {
+      toast.error(formatApiErrorMessage(err), 'Failed to Apply Schedule');
+    },
+  });
+
   const toggleSemester = (id: string) => {
     setSelectedSemesterIds((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
@@ -218,13 +231,26 @@ export const GeneratePage: React.FC = () => {
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          onClick={() => setAiModalOpen(true)}
-          leftIcon={<Sparkles className="w-4 h-4 text-teal-400" />}
-        >
-          AI Natural Language Assistant
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => syncScheduleMutation.mutate()}
+            isLoading={syncScheduleMutation.isPending}
+            leftIcon={<Clock className="w-4 h-4 text-teal-400" />}
+          >
+            Apply Reference Schedule
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAiModalOpen(true)}
+            leftIcon={<Sparkles className="w-4 h-4 text-teal-400" />}
+          >
+            AI Assistant
+          </Button>
+        </div>
       </div>
 
       {/* Main Configuration Grid */}

@@ -4,6 +4,26 @@ import { ERROR_CODES } from '@schedulai/config';
 import { QueryParams } from '@schedulai/shared-types';
 
 export class SubjectService {
+  private validateWeeklyStructure(isLab: unknown, weeklyPeriods: unknown, lecturePeriods: unknown, labPeriods: unknown) {
+    const lab = Boolean(isLab);
+    const expected = lab
+      ? { weeklyPeriods: 2, lecturePeriods: 0, labPeriods: 2 }
+      : { weeklyPeriods: 3, lecturePeriods: 3, labPeriods: 0 };
+    if (
+      Number(weeklyPeriods ?? expected.weeklyPeriods) !== expected.weeklyPeriods ||
+      Number(lecturePeriods ?? expected.lecturePeriods) !== expected.lecturePeriods ||
+      Number(labPeriods ?? expected.labPeriods) !== expected.labPeriods
+    ) {
+      throw new ApiError(
+        lab
+          ? 'Lab subjects must be configured as 2 weekly periods, 0 lecture periods, and 2 lab periods.'
+          : 'Lecture subjects must be configured as 3 weekly periods, 3 lecture periods, and 0 lab periods.',
+        400,
+        ERROR_CODES.BAD_REQUEST
+      );
+    }
+  }
+
   async getAll(params: QueryParams) {
     const page = Math.max(1, Number(params.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(params.limit) || 20));
@@ -64,6 +84,7 @@ export class SubjectService {
   }
 
   async create(data: Record<string, unknown>) {
+    this.validateWeeklyStructure(data.isLab, data.weeklyPeriods, data.lecturePeriods, data.labPeriods);
     const existing = await SubjectModel.findOne({ code: (data.code as string).toUpperCase() });
     if (existing) {
       throw new ApiError(`Subject with code '${data.code}' already exists`, 409, ERROR_CODES.CONFLICT);
@@ -82,6 +103,13 @@ export class SubjectService {
     if (!subject) {
       throw new ApiError('Subject not found', 404, ERROR_CODES.SUBJECT_NOT_FOUND);
     }
+
+    this.validateWeeklyStructure(
+      data.isLab ?? subject.isLab,
+      data.weeklyPeriods ?? subject.weeklyPeriods,
+      data.lecturePeriods ?? subject.lecturePeriods,
+      data.labPeriods ?? subject.labPeriods
+    );
 
     if (data.code && (data.code as string).toUpperCase() !== subject.code) {
       const duplicate = await SubjectModel.findOne({

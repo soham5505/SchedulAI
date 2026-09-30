@@ -26,8 +26,10 @@ import {
   ISchedulerViolation,
   ISlotSuggestion,
   IAITimetableSummaryResponse,
+  IDepartment,
+  IRoomReservation,
 } from '@schedulai/shared-types';
-import { DAYS_OF_WEEK } from '@schedulai/config';
+import { DAYS_OF_WEEK, STANDARD_PERIOD_TIMES } from '@schedulai/config';
 import {
   Download,
   Printer,
@@ -41,12 +43,15 @@ import {
   Filter,
   CheckCircle2,
   AlertTriangle,
+  Lock,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card.js';
 import { Button } from '../components/ui/Button.js';
 import { Select } from '../components/ui/Select.js';
 import { Badge } from '../components/ui/Badge.js';
 import { ConflictModal } from '../components/ui/ConflictModal.js';
+import { shouldMergeLabSlots } from '../utils/timetableLayout.js';
+import { formatTimeRange12Hour } from '../utils/timeFormat.js';
 
 const displaySemesterName = (name: string) => name.replace(/\s*-\s*B1$/i, '');
 
@@ -54,12 +59,14 @@ const displaySemesterName = (name: string) => name.replace(/\s*-\s*B1$/i, '');
 interface TimetableCardProps {
   entry: ITimetableEntry;
   isDragging?: boolean;
+  isTwoPeriodBlock?: boolean;
 }
 
-const TimetableCard: React.FC<TimetableCardProps> = ({ entry, isDragging = false }) => {
+const TimetableCard: React.FC<TimetableCardProps> = ({ entry, isDragging = false, isTwoPeriodBlock = false }) => {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: entry._id,
     data: { entry },
+    disabled: isTwoPeriodBlock,
   });
 
   const style = transform
@@ -79,6 +86,7 @@ const TimetableCard: React.FC<TimetableCardProps> = ({ entry, isDragging = false
   // This is fully data-driven — no hard-coded subject/teacher names.
   const isLab = entry.periodType === 'LAB' || Boolean(subject?.isLab);
   const isTheory = !isLab;
+  const hasSharedLabSession = Boolean(entry.assignmentId) && isLab;
 
   // Batch label: labs show batch code (B1/B2/...); theory always shows 'ALL STUDENTS'.
   const batchLabel = isTheory
@@ -104,7 +112,7 @@ const TimetableCard: React.FC<TimetableCardProps> = ({ entry, isDragging = false
         <span className="font-bold text-slate-100 truncate">{subject?.name || 'Subject'}</span>
         {isLab ? (
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
-            LAB
+            {isTwoPeriodBlock ? '2-PERIOD LAB' : hasSharedLabSession ? 'LAB SESSION' : 'LAB'}
           </span>
         ) : (
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30 shrink-0">
@@ -154,29 +162,85 @@ interface DroppableCellProps {
   day: DayOfWeek;
   timeSlot: ITimeSlot;
   entries: ITimetableEntry[];
+  reservations?: IRoomReservation[];
   isOver?: boolean;
+  isTwoPeriodBlock?: boolean;
+  selectedClassroomId?: string;
+  getDeptName?: (deptId: string | IDepartment) => string;
+  getRoomName?: (roomId: string | IClassroom) => string;
 }
 
-const DroppableCell: React.FC<DroppableCellProps> = ({ day, timeSlot, entries }) => {
+const DroppableCell: React.FC<DroppableCellProps> = ({
+  day,
+  timeSlot,
+  entries,
+  reservations = [],
+  isTwoPeriodBlock = false,
+  selectedClassroomId = '',
+  getDeptName = (d) => String(d),
+  getRoomName = (r) => String(r),
+}) => {
+  const isReserved = reservations.length > 0;
   const { setNodeRef, isOver } = useDroppable({
     id: `slot_${timeSlot._id}`,
     data: { timeSlot, day },
+    disabled: isTwoPeriodBlock || Boolean(selectedClassroomId && isReserved),
   });
 
   return (
     <div
       ref={setNodeRef}
-      className={`min-h-[100px] p-2 rounded-xl border transition-all duration-150 flex flex-col gap-2 ${isOver
+      className={`min-h-[100px] p-2 rounded-xl border transition-all duration-150 flex flex-col gap-2 ${
+        isOver
           ? 'bg-teal-950/40 border-teal-400 ring-2 ring-teal-500/30'
-          : entries.length > 0
-            ? 'bg-slate-900/40 border-slate-800'
-            : 'bg-slate-950/20 border-slate-800/50 hover:bg-slate-900/30'
-        }`}
+          : selectedClassroomId && isReserved
+            ? 'bg-purple-950/30 border-purple-700/60 ring-1 ring-purple-600/30'
+            : entries.length > 0
+              ? 'bg-slate-900/40 border-slate-800'
+              : 'bg-slate-950/20 border-slate-800/50 hover:bg-slate-900/30'
+      }`}
     >
-      {entries.map((entry) => (
-        <TimetableCard key={entry._id} entry={entry} />
+      {/* If looking at a specific classroom and it's reserved */}
+      {selectedClassroomId && reservations.map((res) => (
+        <div
+          key={res._id}
+          className="rounded-lg border border-purple-500/50 bg-purple-950/80 p-2.5 shadow-md text-left relative overflow-hidden"
+        >
+          <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-purple-500"></div>
+          <div className="flex items-center gap-1.5 font-bold text-purple-300 text-xs uppercase tracking-wider">
+            <Lock className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+            <span>CROSS-DEPT LAB RESERVED</span>
+          </div>
+          <div className="text-xs font-semibold text-slate-100 mt-1.5 flex items-center gap-1">
+            <span className="text-purple-200">Reserved By:</span> {getDeptName(res.departmentId)}
+          </div>
+          <div className="text-[11px] text-purple-300 font-mono mt-0.5">
+            Periods {res.startPeriod}–{res.endPeriod} ({formatTimeRange12Hour(timeSlot.startTime, timeSlot.endTime)})
+          </div>
+          {res.reason && (
+            <div className="text-[10px] text-slate-400 mt-1 italic line-clamp-2">
+              Note: {res.reason}
+            </div>
+          )}
+        </div>
       ))}
-      {entries.length === 0 && (
+
+      {/* Render actual entries */}
+      {entries.map((entry) => (
+        <TimetableCard key={entry._id} entry={entry} isTwoPeriodBlock={isTwoPeriodBlock} />
+      ))}
+
+      {/* If viewing whole semester/schedule and a shared lab is blocked in this period */}
+      {!selectedClassroomId && reservations.length > 0 && (
+        <div className="rounded-md border border-purple-800/50 bg-purple-950/40 px-2 py-1 text-[10px] text-purple-300 flex items-center gap-1.5 mt-auto">
+          <Lock className="w-3 h-3 text-purple-400 shrink-0" />
+          <span className="truncate">
+            Blocked: {reservations.map((r) => `${getRoomName(r.classroomId)} (${getDeptName(r.departmentId)})`).join(', ')}
+          </span>
+        </div>
+      )}
+
+      {entries.length === 0 && (!selectedClassroomId || reservations.length === 0) && (
         <div className="flex-1 flex items-center justify-center text-[11px] text-slate-600 italic">
           Empty Slot
         </div>
@@ -269,6 +333,38 @@ export const TimetablePage: React.FC = () => {
     },
   });
 
+  const { data: departments = [] } = useQuery<IDepartment[]>({
+    queryKey: ['departments-filter'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ success: boolean; data: IDepartment[] }>('/departments?limit=100');
+      return res.data.data;
+    },
+  });
+
+  const { data: reservations = [] } = useQuery<IRoomReservation[]>({
+    queryKey: ['room-reservations-active'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ success: boolean; data: IRoomReservation[] }>('/lab-reservations?limit=100');
+      return (res.data.data || []).filter((r) => r.isActive);
+    },
+  });
+
+  const getDeptName = (dept: string | IDepartment | unknown) => {
+    if (typeof dept === 'object' && dept && 'name' in (dept as Record<string, unknown>)) {
+      return String((dept as Record<string, unknown>).name);
+    }
+    const found = departments.find((d) => d._id === String(dept));
+    return found ? found.name : String(dept || 'Other Department');
+  };
+
+  const getRoomName = (roomId: string | IClassroom | unknown) => {
+    if (typeof roomId === 'object' && roomId && 'name' in (roomId as Record<string, unknown>)) {
+      return String((roomId as Record<string, unknown>).name);
+    }
+    const found = classrooms.find((c) => c._id === String(roomId));
+    return found ? found.name : String(roomId || 'Lab');
+  };
+
   const semesterGroupOptions = useMemo(() => {
     const groups = new Map<string, string>();
     for (const semester of semesters) {
@@ -336,6 +432,13 @@ export const TimetablePage: React.FC = () => {
     });
   }, [entries, semesters, selectedBatchId, selectedSemesterGroup]);
 
+  const selectedSemester = semesters.find((semester) => semester._id === selectedSemesterId);
+  const selectedGeneration = generations.find((generation) => generation._id === selectedGenId);
+  const printSemesterTitle = selectedSemester
+    ? `${displaySemesterName(selectedSemester.name)}${selectedSemester.section ? ` (${selectedSemester.section})` : ''}`
+    : selectedSemesterGroup || selectedGeneration?.name || 'All Semesters';
+  const printAcademicYear = selectedSemester?.academicYear || selectedGeneration?.academicYear;
+
   // Mutation for moving an entry
   const moveMutation = useMutation({
     mutationFn: async (payload: {
@@ -370,19 +473,6 @@ export const TimetablePage: React.FC = () => {
       toast.error((err as Error).message, 'Move Error');
     },
   });
-
-  // Group active non-break timeslots by unique period number/time range
-  const standardPeriodSlots = useMemo(() => {
-    const active = timeslots.filter((ts) => ts.isActive && !ts.isBreak);
-    // Unique by periodNumber or startTime
-    const uniqueMap = new Map<number, ITimeSlot>();
-    for (const ts of active) {
-      if (!uniqueMap.has(ts.periodNumber)) {
-        uniqueMap.set(ts.periodNumber, ts);
-      }
-    }
-    return Array.from(uniqueMap.values()).sort((a, b) => a.periodNumber - b.periodNumber);
-  }, [timeslots]);
 
   // Handle Drag Start
   const handleDragStart = (event: DragStartEvent) => {
@@ -588,12 +678,137 @@ export const TimetablePage: React.FC = () => {
       </div>
 
       {/* Printable Heading (Only visible when printing) */}
-      <div className="hidden print-only mb-6 text-black">
-        <h1 className="text-2xl font-bold">SchedulAI — Academic Master Schedule</h1>
-        <p className="text-sm text-gray-600">
-          Generated with Google OR-Tools Constraint Optimizer • Version ID: {selectedGenId}
-        </p>
-      </div>
+      <section className="hidden print-only official-timetable">
+        <header className="official-timetable__header">
+          <h1>Hope Foundation&apos;s Finolex Academy of Management and Technology, Ratnagiri</h1>
+          <p>Department of Information Technology</p>
+          <h2>
+            Timetable ({printSemesterTitle}){printAcademicYear ? ` for AY ${printAcademicYear}` : ''}
+          </h2>
+        </header>
+
+        <table className="official-timetable__grid">
+          <thead>
+            <tr>
+              <th className="official-timetable__day">Day</th>
+              {STANDARD_PERIOD_TIMES.map((periodSlot) => (
+                <th
+                  key={periodSlot.period}
+                  className={periodSlot.isBreak ? 'official-timetable__break-column' : ''}
+                >
+                  <span>{formatTimeRange12Hour(periodSlot.startTime, periodSlot.endTime)}</span>
+                  {periodSlot.isBreak && <span className="official-timetable__break-name">{periodSlot.label}</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DAYS_OF_WEEK.map((day, dayIndex) => {
+              const mergedPeriods = new Set<number>();
+              return (
+              <tr key={day}>
+                <th className="official-timetable__day">{day.slice(0, 3)}</th>
+                {STANDARD_PERIOD_TIMES.map((periodSlot, periodIndex) => {
+                  if (mergedPeriods.has(periodSlot.period)) return null;
+                  if (periodSlot.isBreak) {
+                    if (dayIndex > 0 && dayIndex < DAYS_OF_WEEK.length - 1) return null;
+                    return (
+                      <td
+                        key={periodSlot.period}
+                        rowSpan={dayIndex === 0 ? DAYS_OF_WEEK.length - 1 : undefined}
+                        className="official-timetable__break-column"
+                      >
+                        {dayIndex === 0 && <span className="official-timetable__break-label">{periodSlot.label}</span>}
+                      </td>
+                    );
+                  }
+
+                  const exactSlot = timeslots.find(
+                    (slot) => slot.day === day && slot.periodNumber === periodSlot.period && slot.isActive && !slot.isBreak
+                  );
+                  const cellEntries = filteredEntries.filter((entry) => {
+                    const slotId = typeof entry.timeSlotId === 'string'
+                      ? entry.timeSlotId
+                      : (entry.timeSlotId as unknown as { _id: string })?._id;
+                    return entry.day === day && (
+                      slotId === exactSlot?._id ||
+                      (entry.startTime === periodSlot.startTime && entry.endTime === periodSlot.endTime)
+                    );
+                  });
+                  const nextPeriod = STANDARD_PERIOD_TIMES[periodIndex + 1];
+                  const nextSlot = nextPeriod && !nextPeriod.isBreak
+                    ? timeslots.find(
+                      (slot) => slot.day === day && slot.periodNumber === nextPeriod.period && slot.isActive && !slot.isBreak
+                    )
+                    : undefined;
+                  const nextEntries = nextPeriod && nextSlot
+                    ? filteredEntries.filter((entry) => {
+                      const slotId = typeof entry.timeSlotId === 'string'
+                        ? entry.timeSlotId
+                        : (entry.timeSlotId as unknown as { _id: string })?._id;
+                      return entry.day === day && (
+                        slotId === nextSlot._id ||
+                        (entry.startTime === nextSlot.startTime && entry.endTime === nextSlot.endTime)
+                      );
+                    })
+                    : [];
+                  const mergeNextPeriod = Boolean(
+                    exactSlot && nextPeriod && nextSlot &&
+                    shouldMergeLabSlots(exactSlot, nextSlot, cellEntries, nextEntries)
+                  );
+                  if (mergeNextPeriod && nextPeriod) mergedPeriods.add(nextPeriod.period);
+
+                  const slotReservations = reservations.filter((r) => {
+                    if (r.dayOfWeek !== day) return false;
+                    if (periodSlot.period < r.startPeriod || periodSlot.period > r.endPeriod) return false;
+                    if (!selectedClassroomId) return true;
+                    const rRoomId = typeof r.classroomId === 'string' ? r.classroomId : (r.classroomId as unknown as { _id?: string })?._id;
+                    return rRoomId === selectedClassroomId;
+                  });
+
+                  return (
+                    <td
+                      key={periodSlot.period}
+                      colSpan={mergeNextPeriod ? 2 : 1}
+                      className="official-timetable__slot"
+                    >
+                      {selectedClassroomId && slotReservations.map((res) => (
+                        <div key={res._id} className="official-timetable__entry" style={{ fontStyle: 'italic', color: '#6b21a8', fontWeight: 600 }}>
+                          [RESERVED: {getDeptName(res.departmentId)}]
+                        </div>
+                      ))}
+                      {cellEntries.map((entry) => {
+                        const subject = entry.subjectId as unknown as { name?: string; isLab?: boolean };
+                        const teacher = entry.teacherId as unknown as { name?: string };
+                        const batch = entry.batchId as unknown as { code?: string } | null | undefined;
+                        const isLab = entry.periodType === 'LAB' || Boolean(subject?.isLab);
+                        const teacherInitials = teacher?.name
+                          ?.split(/\s+/)
+                          .map((part) => part[0])
+                          .join('')
+                          .slice(0, 3)
+                          .toUpperCase();
+                        return (
+                          <div key={entry._id} className="official-timetable__entry">
+                            {isLab && batch?.code ? `${batch.code} - ` : ''}
+                            {subject?.name || 'Class'}{teacherInitials ? ` (${teacherInitials})` : ''}
+                          </div>
+                        );
+                      })}
+                    </td>
+                  );
+                })}
+              </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        <footer className="official-timetable__signatures">
+          <span>Prepared By: Timetable Committee</span>
+          <span>Head of Department</span>
+        </footer>
+      </section>
 
       {/* Interactive DnD Matrix Grid */}
       <DndContext
@@ -601,81 +816,121 @@ export const TimetablePage: React.FC = () => {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 overflow-hidden shadow-2xl">
+        <div className="no-print rounded-2xl border border-slate-800 bg-slate-900/80 overflow-hidden shadow-2xl">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            <table className="w-full min-w-[1500px] border-collapse">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/80">
                   <th className="p-4 text-xs font-bold uppercase tracking-wider text-slate-400 w-36 border-r border-slate-800 text-center">
-                    Time / Day
+                    Day
                   </th>
-                  {DAYS_OF_WEEK.map((day) => (
+                  {STANDARD_PERIOD_TIMES.map((periodSlot) => (
                     <th
-                      key={day}
-                      className="p-4 text-xs font-bold uppercase tracking-wider text-teal-300 min-w-[200px] border-r border-slate-800 last:border-r-0 text-center"
+                      key={periodSlot.period}
+                      className={`p-3 text-center min-w-[145px] border-r border-slate-800 last:border-r-0 ${periodSlot.isBreak ? 'bg-amber-950/50 text-amber-200' : 'text-teal-300'}`}
                     >
-                      {day}
+                      <div className="text-xs font-bold uppercase">{periodSlot.label}</div>
+                      <div className="mt-1 font-mono text-[11px] text-slate-300">
+                        {formatTimeRange12Hour(periodSlot.startTime, periodSlot.endTime)}
+                      </div>
                     </th>
                   ))}
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-800">
-                {standardPeriodSlots.map((periodSlot) => (
-                  <tr key={periodSlot.periodNumber} className="hover:bg-slate-900/40 transition">
-                    {/* Time Slot Header Column */}
-                    <td className="p-3.5 border-r border-slate-800 bg-slate-950/50 text-center shrink-0">
-                      <div className="font-bold text-xs text-slate-200">
-                        {periodSlot.label || `Period ${periodSlot.periodNumber}`}
-                      </div>
-                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                        {periodSlot.startTime} – {periodSlot.endTime}
-                      </div>
-                    </td>
-
-                    {/* Day Cells */}
-                    {DAYS_OF_WEEK.map((day) => {
-                      // Find exact matching timeslot for this day and period
-                      const exactSlot = timeslots.find(
-                        (ts) => ts.day === day && ts.periodNumber === periodSlot.periodNumber
-                      );
-
-                      // Find entries in this day & time slot (use filteredEntries for batch filter)
-                      const slotEntries = filteredEntries.filter((e) => {
-                        const tsId = typeof e.timeSlotId === 'string' ? e.timeSlotId : (e.timeSlotId as unknown as { _id: string })?._id;
-                        return (
-                          e.day === day &&
-                          (tsId === exactSlot?._id ||
-                            (e.startTime === periodSlot.startTime && e.endTime === periodSlot.endTime))
-                        );
-                      });
-
-                      if (!exactSlot) {
+                {DAYS_OF_WEEK.map((day) => {
+                  const mergedPeriods = new Set<number>();
+                  return (
+                  <tr key={day}>
+                    <th className="p-3 border-r border-slate-800 bg-slate-950/60 text-xs font-bold uppercase text-teal-200 text-center">
+                      {day}
+                    </th>
+                    {STANDARD_PERIOD_TIMES.map((periodSlot, periodIndex) => {
+                      if (mergedPeriods.has(periodSlot.period)) return null;
+                      if (periodSlot.isBreak) {
                         return (
                           <td
-                            key={day}
-                            className="p-2 border-r border-slate-800/60 last:border-r-0 bg-slate-950/20 text-center text-xs text-slate-600 italic"
+                            key={periodSlot.period}
+                            className="px-2 py-3 border-r border-slate-800 bg-amber-950/40 text-center text-[10px] font-bold uppercase text-amber-200"
                           >
-                            Inactive
+                            {periodSlot.label}
                           </td>
                         );
                       }
 
+                      const exactSlot = timeslots.find(
+                        (ts) => ts.day === day && ts.periodNumber === periodSlot.period && ts.isActive && !ts.isBreak
+                      );
+                      const slotEntries = filteredEntries.filter((entry) => {
+                        const timeSlotId = typeof entry.timeSlotId === 'string'
+                          ? entry.timeSlotId
+                          : (entry.timeSlotId as unknown as { _id: string })?._id;
+                        return entry.day === day && (
+                          timeSlotId === exactSlot?._id ||
+                          (entry.startTime === periodSlot.startTime && entry.endTime === periodSlot.endTime)
+                        );
+                      });
+
+                      const nextPeriod = STANDARD_PERIOD_TIMES[periodIndex + 1];
+                      const nextSlot = nextPeriod && !nextPeriod.isBreak
+                        ? timeslots.find(
+                          (ts) => ts.day === day && ts.periodNumber === nextPeriod.period && ts.isActive && !ts.isBreak
+                        )
+                        : undefined;
+                      const nextEntries = nextPeriod && nextSlot
+                        ? filteredEntries.filter((entry) => {
+                          const timeSlotId = typeof entry.timeSlotId === 'string'
+                            ? entry.timeSlotId
+                            : (entry.timeSlotId as unknown as { _id: string })?._id;
+                          return entry.day === day && (
+                            timeSlotId === nextSlot._id ||
+                            (entry.startTime === nextSlot.startTime && entry.endTime === nextSlot.endTime)
+                          );
+                        })
+                        : [];
+                      const mergeNextPeriod = Boolean(
+                        exactSlot && nextPeriod && nextSlot &&
+                        shouldMergeLabSlots(exactSlot, nextSlot, slotEntries, nextEntries)
+                      );
+                      if (mergeNextPeriod && nextPeriod) mergedPeriods.add(nextPeriod.period);
+
+                      const slotReservations = reservations.filter((r) => {
+                        if (r.dayOfWeek !== day) return false;
+                        if (periodSlot.period < r.startPeriod || periodSlot.period > r.endPeriod) return false;
+                        if (!selectedClassroomId) return true;
+                        const rRoomId = typeof r.classroomId === 'string' ? r.classroomId : (r.classroomId as unknown as { _id?: string })?._id;
+                        return rRoomId === selectedClassroomId;
+                      });
+
                       return (
                         <td
-                          key={day}
-                          className="p-2 border-r border-slate-800/60 last:border-r-0 align-top"
+                          key={periodSlot.period}
+                          colSpan={mergeNextPeriod ? 2 : 1}
+                          className="p-2 border-r border-slate-800/60 align-top"
                         >
-                          <DroppableCell
-                            day={day}
-                            timeSlot={exactSlot}
-                            entries={slotEntries}
-                          />
+                          {exactSlot ? (
+                            <DroppableCell
+                              day={day}
+                              timeSlot={exactSlot}
+                              entries={slotEntries}
+                              reservations={slotReservations}
+                              isTwoPeriodBlock={mergeNextPeriod}
+                              selectedClassroomId={selectedClassroomId}
+                              getDeptName={getDeptName}
+                              getRoomName={getRoomName}
+                            />
+                          ) : (
+                            <div className="min-h-[100px] flex items-center justify-center bg-slate-950/20 text-xs text-slate-600 italic">
+                              Inactive
+                            </div>
+                          )}
                         </td>
                       );
                     })}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -698,7 +953,7 @@ export const TimetablePage: React.FC = () => {
 
       {/* AI Timetable Analysis Drawer / Modal */}
       {aiSummaryOpen && (
-        <Card className="space-y-4 border-teal-500/30 bg-slate-900/95">
+        <Card className="no-print space-y-4 border-teal-500/30 bg-slate-900/95">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-teal-400" />

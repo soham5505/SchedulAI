@@ -11,7 +11,9 @@ from ..models.input_models import (
     SemesterInput,
     BatchInput,
     TimeSlotInput,
+    RoomBlockInput,
     AssignmentInput,
+    HardConstraintsInput,
 )
 from ..models.output_models import (
     GenerateResponse,
@@ -30,7 +32,12 @@ class TimetableSolver:
         self.batches = {b.id: b for b in request.batches}
         self.timeslots = {ts.id: ts for ts in request.timeslots if ts.isActive and not ts.isBreak}
         self.assignments = request.teachingAssignments
-        self.hard_constraints = request.hardConstraints
+        self.room_blocks_by_classroom_day: Dict[Tuple[str, DayOfWeek], List[RoomBlockInput]] = {}
+        for block in request.roomBlocks:
+            self.room_blocks_by_classroom_day.setdefault(
+                (block.classroomId, block.dayOfWeek), []
+            ).append(block)
+        self.hard_constraints = HardConstraintsInput()
         self.soft_constraints = request.softConstraints
         self.time_limit = request.timeLimitSeconds or 60
 
@@ -85,6 +92,45 @@ class TimetableSolver:
             return total_from_batches
         semester = self.semesters.get(assignment.semesterId)
         return semester.studentCount if semester else 0
+
+    @staticmethod
+    def _lab_slots_are_adjacent(first: TimeSlotInput, second: TimeSlotInput) -> bool:
+        if first.day != second.day:
+            return False
+        if second.periodNumber != first.periodNumber + 1:
+            return False
+        first_end = int(first.endTime[:2]) * 60 + int(first.endTime[3:])
+        second_start = int(second.startTime[:2]) * 60 + int(second.startTime[3:])
+        return second_start == first_end
+
+    @staticmethod
+    def _period_intervals_overlap(
+        session_start: int,
+        session_duration: int,
+        blocked_start: int,
+        blocked_duration: int,
+    ) -> bool:
+        """Return whether half-open teaching-period intervals overlap.
+
+        A session [start, end) conflicts with a reservation [block_start,
+        block_end) exactly when start < block_end and end > block_start.
+        """
+        session_end = session_start + session_duration
+        blocked_end = blocked_start + blocked_duration
+        return session_start < blocked_end and session_end > blocked_start
+
+    def _is_classroom_blocked(self, classroom_id: str, timeslot: TimeSlotInput) -> bool:
+        """Whether a room is unavailable for this occupied teaching period."""
+        blocks = self.room_blocks_by_classroom_day.get((classroom_id, timeslot.day), [])
+        return any(
+            self._period_intervals_overlap(
+                timeslot.periodNumber,
+                1,
+                block.startPeriod,
+                block.duration,
+            )
+            for block in blocks
+        )
 
     def _print_diagnostics(self) -> None:
         """Print diagnostic information about semester and faculty workload."""
@@ -230,29 +276,34 @@ class TimetableSolver:
                 valid_pairs = []
                 for ts in self.sorted_timeslots:
                     # Teacher availability check
-                    if self.hard_constraints.enforceTeacherAvailability:
-                        if ts.day not in teacher.availability:
-                            continue
-                        if ts.id in teacher.unavailableTimeSlots:
-                            continue
+                    if ts.day not in teacher.availability or ts.id in teacher.unavailableTimeSlots:
+                        continue
 
                     for c in self.classrooms.values():
                         if not c.isAvailable:
                             continue
 
+                        # Room reservations are an unconditional hard constraint.
+                        # Each lab period receives its own candidate check, so a
+                        # two-period lab is rejected when either occupied period
+                        # overlaps a reservation.
+                        if self._is_classroom_blocked(c.id, ts):
+                            continue
+
+                        is_lab_instance = a.isLab or subject.isLab
                         # Capacity check
-                        if self.hard_constraints.enforceClassroomCapacity:
-                            if c.capacity < self._student_count(a):
-                                continue
+                        required_capacity = max(20, self._student_count(a)) if is_lab_instance else max(80, self._student_count(a))
+                        if c.capacity < required_capacity:
+                            continue
 
                         if a.classroomId and c.id != a.classroomId:
                             continue
 
                         # Lab check
-                        is_lab_instance = a.isLab or subject.isLab
-                        if self.hard_constraints.enforceLabCompatibility:
-                            if is_lab_instance and not c.isLab:
-                                continue
+                        if is_lab_instance and not c.isLab:
+                            continue
+                        if not is_lab_instance and c.isLab:
+                            continue
 
                         # Specific classroom requirements
                         if a.classroomRequirements:
@@ -297,6 +348,72 @@ class TimetableSolver:
             for k in range(num_periods - 1):
                 if (a.id, k) in instance_ts_var and (a.id, k + 1) in instance_ts_var:
                     model.Add(instance_ts_var[(a.id, k)] < instance_ts_var[(a.id, k + 1)])
+
+        # A practical is one paired, same-room block occupying two adjacent
+        # teaching periods. A short break may separate periods; lunch may not.
+        lab_blocks_by_batch_day: Dict[Tuple[str, str, DayOfWeek], List[cp_model.IntVar]] = {}
+        for assignment in self.assignments:
+            subject = self.subjects.get(assignment.subjectId)
+            if not subject or not (assignment.isLab or subject.isLab):
+                continue
+            if assignment.periodsPerWeek != 2:
+                continue
+
+            block_records = []
+            for first_index, first_slot in enumerate(self.sorted_timeslots):
+                for second_slot in self.sorted_timeslots[first_index + 1:]:
+                    if not self._lab_slots_are_adjacent(first_slot, second_slot):
+                        if second_slot.day != first_slot.day:
+                            break
+                        continue
+                    for classroom in self.classrooms.values():
+                        first_var = x.get((assignment.id, 0, first_slot.id, classroom.id))
+                        second_var = x.get((assignment.id, 1, second_slot.id, classroom.id))
+                        if first_var is None or second_var is None:
+                            continue
+                        block_var = model.NewBoolVar(
+                            f"lab_block_{assignment.id}_{first_slot.id}_{classroom.id}"
+                        )
+                        model.Add(block_var <= first_var)
+                        model.Add(block_var <= second_var)
+                        model.Add(block_var >= first_var + second_var - 1)
+                        block_records.append((block_var, first_slot, second_slot, classroom.id))
+                        if assignment.batchId:
+                            key = (assignment.semesterId, assignment.batchId, first_slot.day)
+                            lab_blocks_by_batch_day.setdefault(key, []).append(block_var)
+
+            if not block_records:
+                return GenerateResponse(
+                    success=False,
+                    status="FAILED",
+                    timetable=[],
+                    score=0.0,
+                    violations=[ViolationOutput(
+                        type="NO_VALID_LAB_BLOCK",
+                        severity="ERROR",
+                        message=f"No adjacent two-period lab block is available for assignment {subject.name}.",
+                        details={"assignmentId": assignment.id},
+                    )],
+                    errorMessage="No valid consecutive two-period lab block is available.",
+                )
+
+            model.AddExactlyOne([record[0] for record in block_records])
+            for instance_index in range(2):
+                for slot in self.sorted_timeslots:
+                    for classroom in self.classrooms.values():
+                        period_var = x.get((assignment.id, instance_index, slot.id, classroom.id))
+                        if period_var is None:
+                            continue
+                        matching_blocks = [
+                            block_var
+                            for block_var, first_slot, second_slot, room_id in block_records
+                            if room_id == classroom.id
+                            and slot.id == (first_slot.id if instance_index == 0 else second_slot.id)
+                        ]
+                        model.Add(period_var == sum(matching_blocks))
+
+        for block_vars in lab_blocks_by_batch_day.values():
+            model.Add(sum(block_vars) <= 1)
 
         # 2. Hard Constraints
 
@@ -382,20 +499,16 @@ class TimetableSolver:
                     if day_vars:
                         model.Add(sum(day_vars) <= teacher.maxClassesPerDay)
 
-                # Weekly limit - only enforce if source data explicitly defined it.
-                # Default is False: the API sends isMaxWeeklySourceDefined=false for all
-                # teachers unless overridden, so we must not enforce the UI default.
-                if getattr(teacher, 'isMaxWeeklySourceDefined', False):
-                    all_teacher_vars = []
-                    for a in self.assignments:
-                        if a.teacherId == teacher.id:
-                            for k in range(a.periodsPerWeek):
-                                for ts in self.sorted_timeslots:
-                                    for c in self.classrooms.values():
-                                        if (a.id, k, ts.id, c.id) in x:
-                                            all_teacher_vars.append(x[(a.id, k, ts.id, c.id)])
-                    if all_teacher_vars:
-                        model.Add(sum(all_teacher_vars) <= teacher.maxClassesPerWeek)
+                all_teacher_vars = []
+                for a in self.assignments:
+                    if a.teacherId == teacher.id:
+                        for k in range(a.periodsPerWeek):
+                            for ts in self.sorted_timeslots:
+                                for c in self.classrooms.values():
+                                    if (a.id, k, ts.id, c.id) in x:
+                                        all_teacher_vars.append(x[(a.id, k, ts.id, c.id)])
+                if all_teacher_vars:
+                    model.Add(sum(all_teacher_vars) <= teacher.maxClassesPerWeek)
 
         # 3. Soft Constraints / Objective
         objective_terms = []
@@ -476,6 +589,7 @@ class TimetableSolver:
 
                     timetable.append(
                         TimetableEntryOutput(
+                            assignmentId=assignment.id,
                             semesterId=assignment.semesterId,
                             batchId=assignment.batchId,
                             subjectId=assignment.subjectId,
@@ -555,6 +669,14 @@ class TimetableSolver:
         teacher_demand: Dict[str, int] = {}
 
         for a in self.assignments:
+            subject = self.subjects.get(a.subjectId)
+            if subject and (a.isLab or subject.isLab) and a.periodsPerWeek != 2:
+                violations.append(ViolationOutput(
+                    type="INVALID_LAB_WEEKLY_PERIODS",
+                    severity="ERROR",
+                    message=f"Lab assignment {subject.name} must have exactly 2 periods per week for one two-period practical.",
+                    details={"assignmentId": a.id, "expectedPeriods": 2, "actualPeriods": a.periodsPerWeek},
+                ))
             teacher_demand[a.teacherId] = teacher_demand.get(a.teacherId, 0) + a.periodsPerWeek
             scope = self._student_scope(a.batchId)
             if scope == "ALL":

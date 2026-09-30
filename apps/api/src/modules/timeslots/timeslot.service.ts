@@ -77,31 +77,43 @@ export class TimeSlotService {
     return timeslot.toJSON();
   }
 
-  async bulkGenerateStandard(days: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']) {
-    const created = [];
+  async bulkGenerateStandard(days: DayOfWeek[] = DAYS_OF_WEEK) {
+    const slots = [];
+    const activeSlotIds = [];
+    let createdCount = 0;
     for (const day of days) {
       for (const slot of STANDARD_PERIOD_TIMES) {
-        const existing = await TimeSlotModel.findOne({
+        const existing = await TimeSlotModel.findOne({ day, startTime: slot.startTime, endTime: slot.endTime });
+        const values = {
           day,
           startTime: slot.startTime,
           endTime: slot.endTime,
-        });
+          periodNumber: slot.period,
+          isBreak: slot.isBreak || false,
+          label: slot.label || `Period ${slot.period}`,
+          isActive: true,
+        };
 
-        if (!existing) {
-          const newSlot = await TimeSlotModel.create({
-            day,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            periodNumber: slot.period,
-            isBreak: slot.isBreak || false,
-            label: slot.label || `Period ${slot.period}`,
-            isActive: true,
-          });
-          created.push(newSlot);
+        if (existing) {
+          Object.assign(existing, values);
+          await existing.save();
+          slots.push(existing);
+          activeSlotIds.push(existing._id);
+        } else {
+          const created = await TimeSlotModel.create(values);
+          slots.push(created);
+          activeSlotIds.push(created._id);
+          createdCount++;
         }
       }
     }
-    return { createdCount: created.length, slots: created };
+
+    await TimeSlotModel.updateMany(
+      { day: { $in: days }, _id: { $nin: activeSlotIds }, isActive: true },
+      { $set: { isActive: false } }
+    );
+
+    return { createdCount, slots };
   }
 
   async update(id: string, data: Record<string, unknown>) {

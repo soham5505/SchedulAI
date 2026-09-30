@@ -23,7 +23,7 @@ const ImportJobSchema = new Schema<IImportJobDocument>(
   {
     type: {
       type: String,
-      enum: ['TEACHERS', 'SUBJECTS', 'CLASSROOMS', 'SEMESTERS', 'TIMESLOTS', 'ASSIGNMENTS', 'TIMETABLE'],
+      enum: ['TEACHERS', 'SUBJECTS', 'CLASSROOMS', 'SEMESTERS', 'TIMESLOTS', 'ASSIGNMENTS', 'TIMETABLE', 'MASTER'],
       required: true,
     },
     fileName: {

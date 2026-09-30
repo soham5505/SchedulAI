@@ -22,6 +22,8 @@
     "migrate:002-add-batch-references": "tsx src/scripts/migrations/002-add-batch-references.ts",
     "migrate:003-batch-aware-assignment-index": "tsx src/scripts/migrations/003-batch-aware-assignment-index.ts",
     "migrate:004-repair-stale-references": "cross-env DRY_RUN=false tsx src/scripts/migrations/004-repair-stale-references.ts",
+    "migrate:reference-timetable": "tsx src/scripts/migrations/007-apply-reference-timetable.ts",
+    "migrate:lab-block-periods": "tsx src/scripts/migrations/008-normalize-lab-block-periods.ts",
     "repair:dry-run": "cross-env DRY_RUN=true tsx src/scripts/migrations/004-repair-stale-references.ts"
   },
   "dependencies": {

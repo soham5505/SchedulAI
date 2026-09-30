@@ -31,7 +31,7 @@ export const AssignmentsPage: React.FC = () => {
   const [subjectId, setSubjectId] = useState('');
   const [semesterId, setSemesterId] = useState('');
   const [batchId, setBatchId] = useState(''); // '' = whole class (null)
-  const [periodsPerWeek, setPeriodsPerWeek] = useState(4);
+  const [periodsPerWeek, setPeriodsPerWeek] = useState(3);
   const [isLab, setIsLab] = useState(false);
 
   const { data: teachers = [] } = useQuery<ITeacher[]>({
@@ -137,7 +137,7 @@ export const AssignmentsPage: React.FC = () => {
     setSubjectId(subjects[0]?._id || '');
     setSemesterId(semesters[0]?._id || '');
     setBatchId('');
-    setPeriodsPerWeek(4);
+    setPeriodsPerWeek(3);
     setIsLab(false);
     setModalOpen(true);
   };
@@ -155,8 +155,8 @@ export const AssignmentsPage: React.FC = () => {
     setSubjectId(sId || '');
     setSemesterId(semId || '');
     setBatchId(bId);
-    setPeriodsPerWeek(a.periodsPerWeek);
     setIsLab(a.isLab);
+    setPeriodsPerWeek(a.isLab ? 2 : 3);
     setModalOpen(true);
   };
 
@@ -305,8 +305,8 @@ export const AssignmentsPage: React.FC = () => {
               setSubjectId(e.target.value);
               const found = subjects.find((s) => s._id === e.target.value);
               if (found) {
-                setPeriodsPerWeek(found.weeklyPeriods);
                 setIsLab(found.isLab);
+                setPeriodsPerWeek(found.isLab ? 2 : 3);
               }
             }}
             options={subjects.map((s) => ({ value: s._id, label: `${s.name} (${s.code} - ${s.credits} cr)` }))}
@@ -344,8 +344,9 @@ export const AssignmentsPage: React.FC = () => {
           <Input
             label="Weekly Periods Required"
             type="number"
-            min={1}
-            max={20}
+            min={isLab ? 2 : 3}
+            max={isLab ? 2 : 3}
+            step={1}
             value={periodsPerWeek}
             onChange={(e) => setPeriodsPerWeek(Number(e.target.value))}
             required
@@ -357,6 +358,7 @@ export const AssignmentsPage: React.FC = () => {
               checked={isLab}
               onChange={(e) => {
                 setIsLab(e.target.checked);
+                setPeriodsPerWeek(e.target.checked ? 2 : 3);
                 // When switching from Lab → Theory, clear the batch selection
                 // because theory is always for the whole class (ALL students).
                 if (!e.target.checked) setBatchId('');

@@ -1,8 +1,8 @@
 /**
- * Verify and Fix Semester Active Status
+ * Verify Semester Active Status
  * 
  * Checks if semesters are marked as active in the database
- * and activates them if needed.
+ * without changing their status.
  * 
  * Usage: npm --workspace=@schedulai/api run verify:semesters
  */
@@ -48,26 +48,11 @@ async function verifySemesters() {
       }
     }
 
-    if (inactiveCount > 0) {
-      logger.warn(`\n⚠️  Found ${inactiveCount} inactive semester(s)!`);
-      logger.info('\n🔧 Activating all semesters...\n');
-
-      const result = await SemesterModel.updateMany(
-        { isActive: false },
-        { isActive: true }
-      );
-
-      logger.info(`✅ Updated ${result.modifiedCount} semesters to active`);
-
-      // Show updated status
-      logger.info('\n📈 Updated semester status:\n');
-      const updatedSemesters = await SemesterModel.find({}).lean();
-      for (const semester of updatedSemesters) {
-        logger.info(`✅ ${semester.name} - Active: ${semester.isActive}`);
-      }
-    } else {
-      logger.info('\n✅ All semesters are already active!');
-    }
+    logger.info(
+      inactiveCount > 0
+        ? `\n⚠️  Found ${inactiveCount} inactive semester(s); no records were changed.`
+        : '\n✅ All semesters are already active.'
+    );
 
     logger.info('\n✓ Database connection closed.');
     await mongoose.connection.close();

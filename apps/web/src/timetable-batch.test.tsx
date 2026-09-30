@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import type { ITimetableEntry, IBatch } from '@schedulai/shared-types';
+import { shouldMergeLabSlots } from './utils/timetableLayout.js';
 
 // ---------------------------------------------------------------------------
 // Minimal TimetableCard extracted for unit testing
@@ -84,6 +85,59 @@ function makeBatch(code: string, semId = 'sem-1'): IBatch {
         updatedAt: new Date().toISOString(),
     };
 }
+
+function makeSlot(periodNumber: number, startTime: string, endTime: string) {
+    return {
+        _id: `slot-${periodNumber}`,
+        day: 'MONDAY' as const,
+        startTime,
+        endTime,
+        periodNumber,
+        isBreak: false,
+        isActive: true,
+    };
+}
+
+describe('two-period lab display', () => {
+    it('merges adjacent periods for the same lab assignment and batch', () => {
+        const first = makeEntry({
+            periodType: 'LAB',
+            assignmentId: 'assignment-1',
+            batchId: makeBatch('B1'),
+        });
+        const second = makeEntry({
+            _id: 'entry-2',
+            periodType: 'LAB',
+            assignmentId: 'assignment-1',
+            batchId: makeBatch('B1'),
+        });
+
+        expect(shouldMergeLabSlots(
+            makeSlot(1, '09:15', '10:15'),
+            makeSlot(2, '10:15', '11:15'),
+            [first],
+            [second]
+        )).toBe(true);
+    });
+
+    it('does not merge labs assigned to different batches or non-adjacent periods', () => {
+        const first = makeEntry({ periodType: 'LAB', assignmentId: 'assignment-1', batchId: makeBatch('B1') });
+        const otherBatch = makeEntry({ periodType: 'LAB', assignmentId: 'assignment-1', batchId: makeBatch('B2') });
+
+        expect(shouldMergeLabSlots(
+            makeSlot(1, '09:15', '10:15'),
+            makeSlot(2, '10:15', '11:15'),
+            [first],
+            [otherBatch]
+        )).toBe(false);
+        expect(shouldMergeLabSlots(
+            makeSlot(1, '09:15', '10:15'),
+            makeSlot(3, '11:15', '11:30'),
+            [first],
+            [first]
+        )).toBe(false);
+    });
+});
 
 // ---------------------------------------------------------------------------
 // PART A — TimetableCard batch display

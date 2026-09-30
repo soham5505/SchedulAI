@@ -50,8 +50,11 @@ export interface PreFlightContext {
   validSemesterIds: Set<string>;
   /** Selected batch IDs */
   validBatchIds: Set<string>;
+  batchSemesterMap: Map<string, string>;
+  batchCodeMap: Map<string, string>;
   /** Available classroom IDs (isAvailable=true rooms) */
   availableClassroomIds: Set<string>;
+  classroomIsLabMap: Map<string, boolean>;
   /** Map of semesterId -> total batch student count (sum of all batches) */
   semesterBatchStudentSum: Map<string, number>;
   /** Max capacity of any available non-lab classroom */
@@ -68,6 +71,7 @@ export class PreFlightValidator {
     const warnings: PreFlightIssue[] = [];
     const errorAssignmentIds = new Set<string>();
     const warnAssignmentIds = new Set<string>();
+    const assignmentsByCourse = new Map<string, Array<{ id: string; isLab: boolean; batchId: string | null }>>();
 
     for (const raw of ctx.assignments) {
       const assignmentId = this._str(raw._id ?? raw.id);
@@ -77,7 +81,12 @@ export class PreFlightValidator {
       const batchId    = raw.batchId ? this._str(raw.batchId) : null;
       const classroomId = raw.classroomId ? this._str(raw.classroomId) : null;
       const periodsPerWeek = Number(raw.periodsPerWeek ?? 0);
-      const isLab = Boolean(raw.isLab);
+      const isLab = Boolean(raw.isLab || (subjectRef as Record<string, unknown> | null | undefined)?.isLab);
+
+      const courseKey = `${semesterId}|${this._str(subjectRef?._id)}`;
+      const courseAssignments = assignmentsByCourse.get(courseKey) || [];
+      courseAssignments.push({ id: assignmentId, isLab, batchId });
+      assignmentsByCourse.set(courseKey, courseAssignments);
 
       // ── 1. Teacher reference ──────────────────────────────────────────────
       const teacherId = teacherRef?._id ? this._str(teacherRef._id) : null;
@@ -132,12 +141,39 @@ export class PreFlightValidator {
             action: 'Run migration 004 to clear stale classroomId — solver will choose room dynamically',
           });
           errorAssignmentIds.add(assignmentId);
+        } else {
+          const capacity = ctx.classroomCapacityMap.get(classroomId) ?? 0;
+          const isLabRoom = ctx.classroomIsLabMap.get(classroomId) ?? false;
+          if (isLab && (!isLabRoom || capacity < 20)) {
+            errors.push({
+              assignmentId,
+              field: 'classroomId',
+              problem: `Lab assignment requires an available lab room with capacity >= 20; this room has capacity ${capacity}`,
+              action: 'Clear classroomId for dynamic room selection or assign a qualifying laboratory',
+            });
+            errorAssignmentIds.add(assignmentId);
+          } else if (!isLab && isLabRoom) {
+            errors.push({
+              assignmentId,
+              field: 'classroomId',
+              problem: 'Whole-semester lecture cannot use a laboratory room',
+              action: 'Clear classroomId for dynamic room selection or assign a lecture room',
+            });
+            errorAssignmentIds.add(assignmentId);
+          }
         }
       }
 
-      // ── 5. Lab batch requirement ──────────────────────────────────────────
-      // (This is a warning only — whole-class labs are valid)
-      if (isLab && batchId && !ctx.validBatchIds.has(batchId)) {
+      // ── 5. Assignment scope ───────────────────────────────────────────────
+      if (isLab && !batchId) {
+        errors.push({
+          assignmentId,
+          field: 'batchId',
+          problem: 'Lab assignments must target exactly one batch',
+          action: 'Create one lab assignment for each of B1, B2, B3, and B4',
+        });
+        errorAssignmentIds.add(assignmentId);
+      } else if (isLab && batchId && !ctx.validBatchIds.has(batchId)) {
         errors.push({
           assignmentId,
           field: 'batchId',
@@ -145,15 +181,32 @@ export class PreFlightValidator {
           action: 'Ensure the batch exists and is active for the selected semester',
         });
         errorAssignmentIds.add(assignmentId);
+      } else if (isLab && batchId && ctx.batchSemesterMap.get(batchId) !== semesterId) {
+        errors.push({
+          assignmentId,
+          field: 'batchId',
+          problem: `Batch ${batchId} does not belong to semester ${semesterId}`,
+          action: 'Select a batch belonging to the assignment semester',
+        });
+        errorAssignmentIds.add(assignmentId);
+      } else if (!isLab && batchId) {
+        errors.push({
+          assignmentId,
+          field: 'batchId',
+          problem: 'Lectures must be whole-semester assignments with batchId null',
+          action: 'Remove the batch from this lecture assignment',
+        });
+        errorAssignmentIds.add(assignmentId);
       }
 
       // ── 6. periodsPerWeek ─────────────────────────────────────────────────
-      if (periodsPerWeek < 1) {
+      const expectedPeriods = isLab ? 2 : 3;
+      if (periodsPerWeek !== expectedPeriods) {
         errors.push({
           assignmentId,
           field: 'periodsPerWeek',
-          problem: `periodsPerWeek is ${periodsPerWeek} — must be >= 1`,
-          action: 'Update the assignment to have at least 1 period per week',
+          problem: `${isLab ? 'Lab' : 'Lecture'} assignment has ${periodsPerWeek} period(s); expected exactly ${expectedPeriods} per week`,
+          action: `Update the assignment to exactly ${expectedPeriods} period(s) per week`,
         });
         errorAssignmentIds.add(assignmentId);
       }
@@ -173,7 +226,7 @@ export class PreFlightValidator {
       // ── 8. Lecture capacity check ─────────────────────────────────────────
       if (ctx.enforceClassroomCapacity && !isLab && !batchId) {
         const semBatchSum = ctx.semesterBatchStudentSum.get(semesterId) ?? 0;
-        const studentCount = semBatchSum > 0 ? semBatchSum : 0;
+        const studentCount = Math.max(80, semBatchSum);
         if (studentCount > 0 && studentCount > ctx.maxLectureRoomCapacity) {
           errors.push({
             assignmentId,
@@ -183,6 +236,36 @@ export class PreFlightValidator {
           });
           errorAssignmentIds.add(assignmentId);
         }
+      }
+    }
+
+    for (const [courseKey, courseAssignments] of assignmentsByCourse) {
+      const first = courseAssignments[0];
+      if (first.isLab) {
+        const batchCodes = courseAssignments
+          .map((assignment) => assignment.batchId ? ctx.batchCodeMap.get(assignment.batchId) : undefined)
+          .filter((code): code is string => Boolean(code));
+        if (
+          courseAssignments.length !== 4 ||
+          new Set(batchCodes).size !== 4 ||
+          !['B1', 'B2', 'B3', 'B4'].every((code) => batchCodes.includes(code))
+        ) {
+          errors.push({
+            assignmentId: first.id,
+            field: 'batchAssignments',
+            problem: `Lab course ${courseKey} must have exactly one assignment for each of B1, B2, B3, and B4`,
+            action: 'Create or repair the four batch-specific lab assignments',
+          });
+          courseAssignments.forEach((assignment) => errorAssignmentIds.add(assignment.id));
+        }
+      } else if (courseAssignments.length !== 1 || first.batchId !== null) {
+        errors.push({
+          assignmentId: first.id,
+          field: 'lectureAssignments',
+          problem: `Lecture course ${courseKey} must have exactly one whole-semester assignment`,
+          action: 'Remove batch-specific duplicates and retain one assignment with batchId null',
+        });
+        courseAssignments.forEach((assignment) => errorAssignmentIds.add(assignment.id));
       }
     }
 

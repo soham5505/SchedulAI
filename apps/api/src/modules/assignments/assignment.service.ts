@@ -31,6 +31,19 @@ export class AssignmentService {
     }
   }
 
+  private validateWeeklyQuota(isLab: unknown, periodsPerWeek: unknown) {
+    const expectedPeriods = Boolean(isLab) ? 2 : 3;
+    if (Number(periodsPerWeek ?? expectedPeriods) !== expectedPeriods) {
+      throw new ApiError(
+        Boolean(isLab)
+          ? 'Each batch practical must have exactly 2 periods per week.'
+          : 'Each whole-semester lecture assignment must have exactly 3 periods per week.',
+        400,
+        ERROR_CODES.BAD_REQUEST
+      );
+    }
+  }
+
   /**
    * Validate that a batch exists and belongs to the selected semester.
    *
@@ -209,6 +222,7 @@ export class AssignmentService {
   async create(data: Record<string, unknown>) {
     // Rule 1: Theory cannot have a batch (generic — not tied to any name).
     this.validateTheoryBatch(data.isLab, data.batchId);
+    this.validateWeeklyQuota(data.isLab, data.periodsPerWeek);
 
     // Rule 2: If a batch IS provided it must belong to the selected semester.
     await this.validateBatch(
@@ -235,8 +249,10 @@ export class AssignmentService {
       );
     }
 
-    const assignment =
-      await TeachingAssignmentModel.create(data);
+    const assignment = await TeachingAssignmentModel.create({
+      ...data,
+      periodsPerWeek: data.periodsPerWeek ?? (Boolean(data.isLab) ? 2 : 3),
+    });
 
     return assignment.toJSON();
   }
@@ -262,6 +278,9 @@ export class AssignmentService {
     const nextIsLab =
       data.isLab !== undefined ? data.isLab : assignment.isLab;
 
+    const nextPeriodsPerWeek =
+      data.periodsPerWeek !== undefined ? data.periodsPerWeek : assignment.periodsPerWeek;
+
     const nextBatchId =
       data.batchId !== undefined
         ? data.batchId
@@ -269,6 +288,7 @@ export class AssignmentService {
 
     // Rule 1: Theory cannot have a batch (generic — not tied to any name).
     this.validateTheoryBatch(nextIsLab, nextBatchId);
+    this.validateWeeklyQuota(nextIsLab, nextPeriodsPerWeek);
 
     // Rule 2: If a batch IS provided it must belong to the selected semester.
     await this.validateBatch(

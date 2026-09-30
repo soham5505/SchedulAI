@@ -227,7 +227,7 @@ export async function seedDatabase() {
     semesterIds: [sem3A._id, sem3B._id],
     weeklyPeriods: 4,
     lecturePeriods: 3,
-    labPeriods: 1,
+    labPeriods: 2,
     isLab: false,
     isActive: true,
   });
@@ -240,7 +240,7 @@ export async function seedDatabase() {
     semesterIds: [sem3A._id, sem3B._id],
     weeklyPeriods: 4,
     lecturePeriods: 3,
-    labPeriods: 1,
+    labPeriods: 2,
     isLab: false,
     isActive: true,
   });
@@ -253,7 +253,7 @@ export async function seedDatabase() {
     semesterIds: [sem3A._id, sem3B._id],
     weeklyPeriods: 4,
     lecturePeriods: 3,
-    labPeriods: 1,
+    labPeriods: 2,
     isLab: false,
     isActive: true,
   });
@@ -292,7 +292,7 @@ export async function seedDatabase() {
     semesterIds: [sem5A._id],
     weeklyPeriods: 4,
     lecturePeriods: 3,
-    labPeriods: 1,
+    labPeriods: 2,
     isLab: false,
     isActive: true,
   });

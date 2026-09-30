@@ -16,6 +16,7 @@ import { exportRouter } from '../modules/exports/export.routes.js';
 import { aiRouter } from '../modules/ai/ai.routes.js';
 import { auditRouter } from '../modules/audit/audit.routes.js';
 import { dashboardRouter } from '../modules/dashboard/dashboard.routes.js';
+import { roomReservationRouter } from '../modules/room-reservations/roomReservation.routes.js';
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use('/export', exportRouter);
 router.use('/ai', aiRouter);
 router.use('/audit-logs', auditRouter);
 router.use('/dashboard', dashboardRouter);
+router.use('/lab-reservations', roomReservationRouter);
 
 export const apiV1Router = router;

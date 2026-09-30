@@ -29,6 +29,21 @@
 }
 
 @media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-height: 0;
+    background: white !important;
+    color: #111 !important;
+    font-family: Arial, sans-serif;
+  }
+
   body {
     background: white !important;
     color: black !important;
@@ -38,5 +53,97 @@
   }
   .print-only {
     display: block !important;
+  }
+
+  .official-timetable {
+    width: 100%;
+    color: #111;
+    font-size: 8pt;
+  }
+
+  .official-timetable__header {
+    margin: 0 0 5mm;
+    text-align: center;
+  }
+
+  .official-timetable__header h1 {
+    margin: 0 0 1mm;
+    font-size: 12pt;
+    font-weight: 700;
+  }
+
+  .official-timetable__header p,
+  .official-timetable__header h2 {
+    margin: 0;
+    font-size: 9pt;
+    font-weight: 600;
+  }
+
+  .official-timetable__grid {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    color: #111;
+    font-size: 7pt;
+  }
+
+  .official-timetable__grid th,
+  .official-timetable__grid td {
+    border: 1px solid #222;
+    padding: 1.5mm 1mm;
+    text-align: center;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+  }
+
+  .official-timetable__grid thead th {
+    height: 9mm;
+    font-weight: 700;
+  }
+
+  .official-timetable__day {
+    width: 8%;
+    font-weight: 700;
+  }
+
+  .official-timetable__break-column {
+    width: 4%;
+    padding: 1mm !important;
+  }
+
+  .official-timetable__break-name {
+    display: none;
+  }
+
+  .official-timetable__break-label {
+    display: inline-block;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 7pt;
+    font-weight: 700;
+  }
+
+  .official-timetable__slot {
+    height: 21mm;
+  }
+
+  .official-timetable__entry + .official-timetable__entry {
+    margin-top: 1mm;
+    padding-top: 1mm;
+    border-top: 1px solid #aaa;
+  }
+
+  .official-timetable__signatures {
+    display: flex;
+    justify-content: space-between;
+    margin: 12mm 8% 0;
+    font-size: 8pt;
+    font-weight: 600;
+  }
+
+  .official-timetable__signatures span {
+    min-width: 35%;
+    border-top: 1px solid #444;
+    padding-top: 2mm;
   }
 }

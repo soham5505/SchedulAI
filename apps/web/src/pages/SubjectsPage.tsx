@@ -25,9 +25,9 @@ export const SubjectsPage: React.FC = () => {
   const [code, setCode] = useState('');
   const [credits, setCredits] = useState(3);
   const [departmentId, setDepartmentId] = useState('');
-  const [weeklyPeriods, setWeeklyPeriods] = useState(4);
+  const [weeklyPeriods, setWeeklyPeriods] = useState(3);
   const [lecturePeriods, setLecturePeriods] = useState(3);
-  const [labPeriods, setLabPeriods] = useState(1);
+  const [labPeriods, setLabPeriods] = useState(0);
   const [isLab, setIsLab] = useState(false);
 
   const { data: departments = [] } = useQuery<IDepartment[]>({
@@ -99,9 +99,9 @@ export const SubjectsPage: React.FC = () => {
     setCode('');
     setCredits(3);
     setDepartmentId(departments[0]?._id || '');
-    setWeeklyPeriods(4);
+    setWeeklyPeriods(3);
     setLecturePeriods(3);
-    setLabPeriods(1);
+    setLabPeriods(0);
     setIsLab(false);
     setModalOpen(true);
   };
@@ -113,10 +113,10 @@ export const SubjectsPage: React.FC = () => {
     setCredits(s.credits);
     const deptId = typeof s.departmentId === 'string' ? s.departmentId : (s.departmentId as IDepartment)?._id;
     setDepartmentId(deptId || '');
-    setWeeklyPeriods(s.weeklyPeriods);
-    setLecturePeriods(s.lecturePeriods);
-    setLabPeriods(s.labPeriods);
     setIsLab(s.isLab);
+    setWeeklyPeriods(s.isLab ? 2 : 3);
+    setLecturePeriods(s.isLab ? 0 : 3);
+    setLabPeriods(s.isLab ? 2 : 0);
     setModalOpen(true);
   };
 
@@ -264,8 +264,9 @@ export const SubjectsPage: React.FC = () => {
             <Input
               label="Total Weekly Periods"
               type="number"
-              min={1}
-              max={20}
+              min={isLab ? 2 : 3}
+              max={isLab ? 2 : 3}
+              step={1}
               value={weeklyPeriods}
               onChange={(e) => setWeeklyPeriods(Number(e.target.value))}
               required
@@ -274,8 +275,9 @@ export const SubjectsPage: React.FC = () => {
             <Input
               label="Lecture Periods / Wk"
               type="number"
-              min={0}
-              max={20}
+              min={isLab ? 0 : 3}
+              max={isLab ? 0 : 3}
+              step={1}
               value={lecturePeriods}
               onChange={(e) => setLecturePeriods(Number(e.target.value))}
               required
@@ -284,8 +286,9 @@ export const SubjectsPage: React.FC = () => {
             <Input
               label="Lab Periods / Wk"
               type="number"
-              min={0}
-              max={20}
+              min={isLab ? 2 : 0}
+              max={isLab ? 2 : 0}
+              step={1}
               value={labPeriods}
               onChange={(e) => setLabPeriods(Number(e.target.value))}
               required
@@ -296,7 +299,13 @@ export const SubjectsPage: React.FC = () => {
             <input
               type="checkbox"
               checked={isLab}
-              onChange={(e) => setIsLab(e.target.checked)}
+              onChange={(e) => {
+                const nextIsLab = e.target.checked;
+                setIsLab(nextIsLab);
+                setWeeklyPeriods(nextIsLab ? 2 : 3);
+                setLecturePeriods(nextIsLab ? 0 : 3);
+                setLabPeriods(nextIsLab ? 2 : 0);
+              }}
               className="w-4 h-4 accent-teal-500 rounded cursor-pointer"
             />
             <span>This is a laboratory practical subject (requires lab room)</span>

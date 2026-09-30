@@ -28,7 +28,7 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // Top-level Health Check
-app.get('/health', async (_req, res) => {
+const healthHandler = async (_req: any, res: any) => {
   const dbStatus = isDatabaseConnected() ? 'connected' : 'disconnected';
   const schedulerAvailable = await schedulerClient.healthCheck();
 
@@ -42,7 +42,10 @@ app.get('/health', async (_req, res) => {
     database: dbStatus,
     scheduler: schedulerAvailable ? 'available' : 'unavailable',
   });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/v1/health', healthHandler);
 
 // Mount API v1 routes
 app.use('/api/v1', apiV1Router);

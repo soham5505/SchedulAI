@@ -4,6 +4,7 @@ from .input_models import DayOfWeek, PeriodType, TimeSlotInput, ClassroomInput
 
 
 class TimetableEntryOutput(BaseModel):
+    assignmentId: Optional[str] = None
     semesterId: str
     batchId: Optional[str] = None
     subjectId: str

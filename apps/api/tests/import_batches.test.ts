@@ -56,7 +56,7 @@ describe('batch-aware Excel assignment import', () => {
     const job = await importService.executeImport(
       'ASSIGNMENTS',
       { employeeId: 'Faculty ID', code: 'Course Code', name: 'Semester', batchCode: 'Batch', location: 'Location', weeklyPeriods: 'Hours' },
-      ['B1', 'B2', 'B3'].map((batch) => ({ 'Faculty ID': batch, 'Course Code': 'IOE', Semester: 'Sem A', Batch: batch, Location: 'Lab A', Hours: 8 })),
+      ['B1', 'B2', 'B3'].map((batch) => ({ 'Faculty ID': batch, 'Course Code': 'IOE', Semester: 'Sem A', Batch: batch, Location: 'Lab A', Hours: 2 })),
       'assignments.xlsx', undefined, { _id: new mongoose.Types.ObjectId() } as never
     );
 
@@ -83,6 +83,21 @@ describe('batch-aware Excel assignment import', () => {
     expect(job.successRows).toBe(1);
     expect(job.errorRows).toBe(1);
     expect(job.rowErrors[0].message).toContain('Duplicate assignment');
+  });
+
+  it('rejects lab assignment imports unless weekly periods equal two', async () => {
+    vi.spyOn(BatchModel, 'findOne').mockReturnValue(queryResult({ _id: batches.get('B1') }) as never);
+    const job = await importService.executeImport(
+      'ASSIGNMENTS',
+      { employeeId: 'Faculty ID', code: 'Course Code', name: 'Semester', batchCode: 'Batch', weeklyPeriods: 'Hours' },
+      [{ 'Faculty ID': 'T1', 'Course Code': 'IOE', Semester: 'Sem A', Batch: 'B1', Hours: 1 }],
+      'assignments.xlsx', undefined, { _id: new mongoose.Types.ObjectId() } as never
+    );
+
+    expect(job.successRows).toBe(0);
+    expect(job.errorRows).toBe(1);
+    expect(job.rowErrors[0].message).toContain('exactly 2 periods per week');
+    expect(TeachingAssignmentModel.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('keeps a legacy assignment without a batch as whole-class data', async () => {

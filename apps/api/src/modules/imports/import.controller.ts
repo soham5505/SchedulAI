@@ -19,9 +19,52 @@ export class ImportController {
     }
   }
 
+  async downloadMasterTemplate(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const buffer = importService.generateMasterTemplate();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename="Master_Academic_Data_Template.xlsx"');
+      res.setHeader('Content-Length', buffer.length);
+      return res.send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async execute(req: Request, res: Response, next: NextFunction) {
     try {
-      const { type, columnMapping, data, fileName, departmentId } = req.body;
+      const { type, columnMapping, data, sheetsData, fileName, departmentId } = req.body;
+
+      if (type === 'MASTER') {
+        const rawSheets = sheetsData || (data && typeof data === 'object' && !Array.isArray(data) ? data : null);
+        if (!rawSheets || typeof rawSheets !== 'object') {
+          throw new ApiError('Master import requires multi-sheet data', 400, ERROR_CODES.BAD_REQUEST);
+        }
+
+        const job = await importService.executeMasterImport(
+          rawSheets,
+          fileName || 'master-import.xlsx',
+          departmentId,
+          req.user!
+        );
+
+        if (req.user) {
+          await logAudit({
+            userId: req.user._id,
+            userEmail: req.user.email,
+            userName: req.user.name,
+            action: 'IMPORT_DATA',
+            entity: 'ImportJob',
+            entityId: String(job._id),
+            newValue: { type: 'MASTER', successRows: job.successRows, errorRows: job.errorRows },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+          });
+        }
+
+        return sendCreated(res, job, 'Master import executed');
+      }
+
       if (!type || !columnMapping || !Array.isArray(data)) {
         throw new ApiError('Invalid import request parameters', 400, ERROR_CODES.BAD_REQUEST);
       }

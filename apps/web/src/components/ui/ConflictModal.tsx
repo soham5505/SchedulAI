@@ -5,6 +5,7 @@ import { Button } from './Button.js';
 import { Badge } from './Badge.js';
 import { ISchedulerViolation, ISlotSuggestion } from '@schedulai/shared-types';
 import { apiClient } from '../../api/client.js';
+import { formatTimeRange12Hour } from '../../utils/timeFormat.js';
 
 export interface ConflictModalProps {
   isOpen: boolean;
@@ -140,7 +141,7 @@ export const ConflictModal: React.FC<ConflictModalProps> = ({
                       <Badge variant="teal">{sug.timeSlot.day}</Badge>
                       <span className="flex items-center gap-1 text-xs text-slate-200 font-medium">
                         <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        {sug.timeSlot.startTime} – {sug.timeSlot.endTime} (Period {sug.timeSlot.periodNumber})
+                        {formatTimeRange12Hour(sug.timeSlot.startTime, sug.timeSlot.endTime)} (Period {sug.timeSlot.periodNumber})
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-400">

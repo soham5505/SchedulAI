@@ -11,3 +11,4 @@ export * from './timetable.model.js';
 export * from './generation.model.js';
 export * from './audit.model.js';
 export * from './importJob.model.js';
+export * from './roomReservation.model.js';

@@ -55,7 +55,7 @@ const TeachingAssignmentSchema = new Schema<ITeachingAssignmentDocument>(
       required: [true, 'Periods per week is required'],
       min: 1,
       max: 20,
-      default: 4,
+      default: 3,
     },
     isLab: {
       type: Boolean,

@@ -35,6 +35,7 @@ export const ImportTypeSchema = z.enum([
   'TIMESLOTS',
   'ASSIGNMENTS',
   'TIMETABLE',
+  'MASTER',
 ]);
 
 export const TimeStringSchema = z
@@ -196,6 +197,34 @@ export const CreateBatchSchema = z.object({
 
 export const UpdateBatchSchema = CreateBatchSchema.omit({ semesterId: true }).partial();
 
+// ==========================================
+// ROOM RESERVATION SCHEMAS
+// ==========================================
+
+export const CreateRoomReservationSchema = z.object({
+  classroomId: MongoIdSchema,
+  departmentId: MongoIdSchema,
+  dayOfWeek: DayOfWeekSchema,
+  startPeriod: z.number().int().min(1, 'Start period must be at least 1').max(20),
+  endPeriod: z.number().int().min(1, 'End period must be at least 1').max(20),
+  reason: z.string().max(500).default(''),
+  isActive: z.boolean().default(true),
+}).refine((data) => data.endPeriod >= data.startPeriod, {
+  message: 'End period must be greater than or equal to start period',
+  path: ['endPeriod'],
+});
+
+export const UpdateRoomReservationSchema = z.object({
+  classroomId: MongoIdSchema.optional(),
+  departmentId: MongoIdSchema.optional(),
+  dayOfWeek: DayOfWeekSchema.optional(),
+  startPeriod: z.number().int().min(1).max(20).optional(),
+  endPeriod: z.number().int().min(1).max(20).optional(),
+  reason: z.string().max(500).optional(),
+  isActive: z.boolean().optional(),
+});
+
+
 
 // ==========================================
 // TIME SLOT SCHEMAS
@@ -217,18 +246,29 @@ export const UpdateTimeSlotSchema = CreateTimeSlotSchema.partial();
 // TEACHING ASSIGNMENT SCHEMAS
 // ==========================================
 
-export const CreateTeachingAssignmentSchema = z.object({
+const TeachingAssignmentBaseSchema = z.object({
   teacherId: MongoIdSchema,
   subjectId: MongoIdSchema,
   semesterId: MongoIdSchema,
   batchId: MongoIdSchema.nullable().optional(),
   classroomId: MongoIdSchema.optional(),
   classroomRequirements: z.array(z.string()).default([]),
-  periodsPerWeek: z.number().int().min(1).max(20).default(4),
+  periodsPerWeek: z.number().int().min(2).max(3).default(3),
   isLab: z.boolean().default(false),
 });
 
-export const UpdateTeachingAssignmentSchema = CreateTeachingAssignmentSchema.partial();
+export const CreateTeachingAssignmentSchema = TeachingAssignmentBaseSchema.superRefine((assignment, context) => {
+  const expectedPeriods = assignment.isLab ? 2 : 3;
+  if (assignment.periodsPerWeek !== expectedPeriods) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['periodsPerWeek'],
+      message: `This assignment must have exactly ${expectedPeriods} period(s) per week.`,
+    });
+  }
+});
+
+export const UpdateTeachingAssignmentSchema = TeachingAssignmentBaseSchema.partial();
 
 // ==========================================
 // HARD & SOFT CONSTRAINTS SCHEMAS
@@ -350,4 +390,9 @@ export const PaginationQuerySchema = z.object({
 
 export const BatchQuerySchema = PaginationQuerySchema.extend({
   semesterId: MongoIdSchema.optional(),
+});
+
+export const RoomReservationQuerySchema = PaginationQuerySchema.extend({
+  classroomId: MongoIdSchema.optional(),
+  dayOfWeek: DayOfWeekSchema.optional(),
 });

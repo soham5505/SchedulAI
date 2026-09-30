@@ -18,8 +18,13 @@ export const SettingsPage: React.FC = () => {
   }>({
     queryKey: ['system-health'],
     queryFn: async () => {
-      const res = await apiClient.get('/health', { baseURL: '' });
-      return res.data;
+      try {
+        const res = await apiClient.get('/health');
+        return res.data;
+      } catch {
+        const fallback = await apiClient.get('/health', { baseURL: '' });
+        return fallback.data;
+      }
     },
     refetchInterval: 15000,
   });

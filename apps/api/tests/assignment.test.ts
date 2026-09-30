@@ -72,7 +72,7 @@ describe('AssignmentService — theory/lab batch validation', () => {
                 subjectId: String(new mongoose.Types.ObjectId()),
                 semesterId: String(semesterId),
                 batchId: null,              // ← whole class: correct for theory
-                periodsPerWeek: 4,
+                periodsPerWeek: 3,
                 isLab: false,
                 classroomRequirements: [],
             })
@@ -103,6 +103,34 @@ describe('AssignmentService — theory/lab batch validation', () => {
                 classroomRequirements: [],
             })
         ).resolves.toBeDefined();
+    });
+
+    it('rejects lab assignments unless they have exactly two weekly periods', async () => {
+        await expect(
+            assignmentService.create({
+                teacherId: String(new mongoose.Types.ObjectId()),
+                subjectId: String(new mongoose.Types.ObjectId()),
+                semesterId: String(semesterId),
+                batchId: String(batchId),
+                periodsPerWeek: 1,
+                isLab: true,
+                classroomRequirements: [],
+            })
+        ).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    it('rejects whole-semester lectures unless they have exactly three weekly periods', async () => {
+        await expect(
+            assignmentService.create({
+                teacherId: String(new mongoose.Types.ObjectId()),
+                subjectId: String(new mongoose.Types.ObjectId()),
+                semesterId: String(semesterId),
+                batchId: null,
+                periodsPerWeek: 2,
+                isLab: false,
+                classroomRequirements: [],
+            })
+        ).rejects.toMatchObject({ statusCode: 400 });
     });
 
     // TEST 4: Lab + batchId belonging to a DIFFERENT semester → REJECTED

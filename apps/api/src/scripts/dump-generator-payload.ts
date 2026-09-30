@@ -85,7 +85,7 @@ async function dumpPayload() {
                 code: String(s.code || ''),
                 weeklyPeriods: Number(s.weeklyPeriods) || 4,
                 lecturePeriods: s.lecturePeriods !== undefined ? Number(s.lecturePeriods) : 3,
-                labPeriods: s.labPeriods !== undefined ? Number(s.labPeriods) : 1,
+                labPeriods: s.labPeriods !== undefined ? Number(s.labPeriods) : 2,
                 isLab: Boolean(s.isLab),
             })),
             classrooms: classrooms.map((c) => ({

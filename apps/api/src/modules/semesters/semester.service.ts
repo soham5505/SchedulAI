@@ -207,7 +207,7 @@ export class SemesterService {
         )
         .lean();
 
-    return createdSemester;
+    return createdSemester ?? semester.toJSON();
   }
 
   async update(

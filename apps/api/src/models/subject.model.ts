@@ -57,7 +57,7 @@ const SubjectSchema = new Schema<ISubjectDocument>(
     weeklyPeriods: {
       type: Number,
       required: true,
-      default: 4,
+      default: 3,
       min: 1,
       max: 20,
     },
@@ -69,7 +69,7 @@ const SubjectSchema = new Schema<ISubjectDocument>(
     },
     labPeriods: {
       type: Number,
-      default: 1,
+      default: 0,
       min: 0,
       max: 20,
     },

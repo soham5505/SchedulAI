@@ -43,8 +43,8 @@ def sample_payload():
                 "id": "s2",
                 "name": "Compiler Design",
                 "code": "CS201",
-                "weeklyPeriods": 2,
-                "lecturePeriods": 2,
+                "weeklyPeriods": 3,
+                "lecturePeriods": 3,
                 "labPeriods": 0,
                 "isLab": False
             }
@@ -53,7 +53,7 @@ def sample_payload():
             {
                 "id": "c1",
                 "name": "Hall 101",
-                "capacity": 50,
+                "capacity": 80,
                 "type": "LECTURE",
                 "equipment": ["PROJECTOR"],
                 "isLab": False,
@@ -139,7 +139,7 @@ def sample_payload():
                 "subjectId": "s2",
                 "semesterId": "sem1",
                 "classroomRequirements": [],
-                "periodsPerWeek": 2,
+                "periodsPerWeek": 3,
                 "isLab": False
             }
         ],
@@ -168,7 +168,7 @@ def test_generate_timetable_success(sample_payload):
     data = response.json()
     assert data["success"] is True
     assert data["status"] == "COMPLETED"
-    assert len(data["timetable"]) == 5  # 3 + 2 = 5 periods total
+    assert len(data["timetable"]) == 6  # 3 periods for each lecture
 
     # Check for no overlaps
     scheduled_slots = [e["timeSlotId"] for e in data["timetable"]]
@@ -188,16 +188,20 @@ def test_generate_timetable_infeasible(sample_payload):
 
 def _batch_payload(sample_payload):
     payload = deepcopy(sample_payload)
-    payload["timeslots"] = payload["timeslots"][:3]
+    payload["timeslots"] = [
+        {"id": "ts1", "day": "MONDAY", "startTime": "09:00", "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:00", "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
+    ]
     for teacher in payload["teachers"]:
-        teacher["unavailableTimeSlots"] = ["ts2", "ts3"]
+        teacher["unavailableTimeSlots"] = []
+    payload["classrooms"][0].update({"capacity": 20, "type": "LAB", "isLab": True})
     payload["classrooms"] = payload["classrooms"] + [
-        {"id": "c2", "name": "Hall 102", "capacity": 50, "type": "LECTURE", "equipment": [], "isLab": False, "isAvailable": True},
-        {"id": "c3", "name": "Hall 103", "capacity": 50, "type": "LECTURE", "equipment": [], "isLab": False, "isAvailable": True},
+        {"id": "c2", "name": "Lab 102", "capacity": 20, "type": "LAB", "equipment": [], "isLab": True, "isAvailable": True},
+        {"id": "c3", "name": "Lab 103", "capacity": 20, "type": "LAB", "equipment": [], "isLab": True, "isAvailable": True},
     ]
     payload["teachers"].append({
         "id": "t3", "name": "Dr. Katherine Johnson", "availability": ["MONDAY"],
-        "preferredTimeSlots": [], "unavailableTimeSlots": ["ts2", "ts3"], "maxClassesPerDay": 4,
+        "preferredTimeSlots": [], "unavailableTimeSlots": [], "maxClassesPerDay": 4,
         "maxClassesPerWeek": 15, "isMaxWeeklySourceDefined": True,
     })
     payload["batches"] = [
@@ -206,9 +210,9 @@ def _batch_payload(sample_payload):
         {"id": "b3", "semesterId": "sem1", "code": "B3", "studentCount": 20},
     ]
     payload["teachingAssignments"] = [
-        {"id": "a1", "teacherId": "t1", "subjectId": "s1", "semesterId": "sem1", "batchId": "b1", "classroomId": "c1", "periodsPerWeek": 1, "isLab": False, "classroomRequirements": []},
-        {"id": "a2", "teacherId": "t2", "subjectId": "s2", "semesterId": "sem1", "batchId": "b2", "classroomId": "c2", "periodsPerWeek": 1, "isLab": False, "classroomRequirements": []},
-        {"id": "a3", "teacherId": "t3", "subjectId": "s1", "semesterId": "sem1", "batchId": "b3", "classroomId": "c3", "periodsPerWeek": 1, "isLab": False, "classroomRequirements": []},
+        {"id": "a1", "teacherId": "t1", "subjectId": "s1", "semesterId": "sem1", "batchId": "b1", "classroomId": "c1", "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
+        {"id": "a2", "teacherId": "t2", "subjectId": "s2", "semesterId": "sem1", "batchId": "b2", "classroomId": "c2", "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
+        {"id": "a3", "teacherId": "t3", "subjectId": "s1", "semesterId": "sem1", "batchId": "b3", "classroomId": "c3", "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
     ]
     return payload
 
@@ -246,6 +250,42 @@ def test_same_teacher_across_batches_is_still_infeasible(sample_payload):
     assert response.json()["success"] is False
 
 
+def test_lab_requires_two_consecutive_periods_without_gap(sample_payload):
+    payload = deepcopy(sample_payload)
+    payload["classrooms"] = [
+        {"id": "lab1", "name": "Lab 101", "capacity": 20, "type": "LAB", "equipment": [], "isLab": True, "isAvailable": True},
+        {"id": "c1", "name": "Hall 101", "capacity": 80, "type": "LECTURE", "equipment": ["PROJECTOR"], "isLab": False, "isAvailable": True},
+    ]
+    payload["timeslots"] = [
+        {"id": "ts1", "day": "MONDAY", "startTime": "09:00", "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:15", "endTime": "11:15", "periodNumber": 2, "isBreak": False, "isActive": True},
+    ]
+    payload["teachingAssignments"] = [
+        {"id": "a1", "teacherId": "t1", "subjectId": "s1", "semesterId": "sem1", "batchId": "b1", "classroomId": "lab1", "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
+    ]
+    payload["batches"] = [{"id": "b1", "semesterId": "sem1", "code": "B1", "studentCount": 20}]
+    response = client.post("/generate", json=payload)
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+
+
+def test_lab_cannot_start_in_last_available_period(sample_payload):
+    payload = deepcopy(sample_payload)
+    payload["teachers"][0]["availability"] = ["MONDAY"]
+    payload["classrooms"] = [{"id": "lab1", "name": "Lab 101", "capacity": 20, "type": "LAB", "equipment": [], "isLab": True, "isAvailable": True}]
+    payload["timeslots"] = [
+        {"id": "ts1", "day": "MONDAY", "startTime": "09:00", "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:00", "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
+    ]
+    payload["teachingAssignments"] = [
+        {"id": "a1", "teacherId": "t1", "subjectId": "s1", "semesterId": "sem1", "batchId": "b1", "classroomId": "lab1", "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
+    ]
+    payload["batches"] = [{"id": "b1", "semesterId": "sem1", "code": "B1", "studentCount": 20}]
+    response = client.post("/generate", json=payload)
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+
+
 def test_assignment_room_is_preserved(sample_payload):
     payload = _batch_payload(sample_payload)
     payload["teachingAssignments"] = payload["teachingAssignments"][:1]
@@ -259,6 +299,137 @@ def test_legacy_assignment_without_batch_still_generates(sample_payload):
     assert response.status_code == 200
     assert response.json()["success"] is True
     assert all("batchId" not in entry or entry["batchId"] is None for entry in response.json()["timetable"])
+
+
+def _room_block_payload(is_lab: bool, period_count: int, room_blocks=None):
+    """Build a minimal fixed-room payload for room-reservation tests."""
+    room_id = "lab1" if is_lab else "room1"
+    assignment = {
+        "id": "a1",
+        "teacherId": "t1",
+        "subjectId": "s1",
+        "semesterId": "sem1",
+        "classroomId": room_id,
+        "periodsPerWeek": 2 if is_lab else 1,
+        "isLab": is_lab,
+        "classroomRequirements": [],
+    }
+    if is_lab:
+        assignment["batchId"] = "b1"
+
+    return {
+        "teachers": [{
+            "id": "t1", "name": "Room Block Teacher", "availability": ["MONDAY"],
+            "preferredTimeSlots": [], "unavailableTimeSlots": [],
+            "maxClassesPerDay": 10, "maxClassesPerWeek": 20,
+            "isMaxWeeklySourceDefined": False,
+        }],
+        "subjects": [{
+            "id": "s1", "name": "Practical" if is_lab else "Theory", "code": "SUB1",
+            "weeklyPeriods": 2 if is_lab else 1,
+            "lecturePeriods": 0 if is_lab else 1,
+            "labPeriods": 2 if is_lab else 0,
+            "isLab": is_lab,
+        }],
+        "classrooms": [{
+            "id": room_id, "name": "Shared Lab" if is_lab else "Shared Room",
+            "capacity": 20 if is_lab else 80,
+            "type": "LAB" if is_lab else "LECTURE",
+            "equipment": [], "isLab": is_lab, "isAvailable": True,
+        }],
+        "semesters": [{"id": "sem1", "name": "Semester 1", "studentCount": 20}],
+        "batches": ([{"id": "b1", "semesterId": "sem1", "code": "B1", "studentCount": 20}] if is_lab else []),
+        "timeslots": [
+            {
+                "id": f"ts{period}", "day": "MONDAY",
+                "startTime": f"{8 + period:02d}:00",
+                "endTime": f"{9 + period:02d}:00",
+                "periodNumber": period, "isBreak": False, "isActive": True,
+            }
+            for period in range(1, period_count + 1)
+        ],
+        "roomBlocks": room_blocks or [],
+        "teachingAssignments": [assignment],
+        "softConstraints": {"avoidEarlyMorning": 0, "avoidFridayAfternoon": 0, "spreadSubjects": 0},
+        "timeLimitSeconds": 5,
+    }
+
+
+def test_theory_cannot_use_a_blocked_room():
+    payload = _room_block_payload(
+        is_lab=False,
+        period_count=2,
+        room_blocks=[{
+            "id": "block1", "classroomId": "room1", "departmentId": "other-department",
+            "dayOfWeek": "MONDAY", "startPeriod": 1, "duration": 1,
+            "reason": "Reserved by another department",
+        }],
+    )
+
+    result = client.post("/generate", json=payload).json()
+
+    assert result["success"] is True
+    assert [entry["timeSlotId"] for entry in result["timetable"]] == ["ts2"]
+
+
+def test_lab_cannot_use_room_when_first_period_is_blocked():
+    payload = _room_block_payload(
+        is_lab=True,
+        period_count=2,
+        room_blocks=[{
+            "classroomId": "lab1", "dayOfWeek": "MONDAY",
+            "startPeriod": 1, "duration": 1,
+        }],
+    )
+
+    result = client.post("/generate", json=payload).json()
+
+    assert result["success"] is False
+    assert any(item["type"] == "NO_VALID_LAB_BLOCK" for item in result["violations"])
+
+
+def test_lab_cannot_use_room_when_second_period_is_blocked():
+    payload = _room_block_payload(
+        is_lab=True,
+        period_count=2,
+        room_blocks=[{
+            "classroomId": "lab1", "dayOfWeek": "MONDAY",
+            "startPeriod": 2, "duration": 1,
+        }],
+    )
+
+    result = client.post("/generate", json=payload).json()
+
+    assert result["success"] is False
+    assert any(item["type"] == "NO_VALID_LAB_BLOCK" for item in result["violations"])
+
+
+def test_lab_can_use_room_when_both_periods_are_free():
+    result = client.post(
+        "/generate",
+        json=_room_block_payload(is_lab=True, period_count=2),
+    ).json()
+
+    assert result["success"] is True
+    assert {entry["timeSlotId"] for entry in result["timetable"]} == {"ts1", "ts2"}
+
+
+def test_lab_cannot_jump_over_a_blocked_interval():
+    payload = _room_block_payload(
+        is_lab=True,
+        period_count=4,
+        room_blocks=[{
+            "classroomId": "lab1", "dayOfWeek": "MONDAY",
+            "startPeriod": 2, "duration": 2,
+        }],
+    )
+
+    result = client.post("/generate", json=payload).json()
+
+    # P1-P2, P2-P3, and P3-P4 each overlap the P2-P3 reservation.  The
+    # solver must not fabricate a non-consecutive P1/P4 practical instead.
+    assert result["success"] is False
+    assert any(item["type"] == "NO_VALID_LAB_BLOCK" for item in result["violations"])
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +471,7 @@ def _make_base(n_teachers: int, n_timeslots: int) -> dict:
              "lecturePeriods": 1, "labPeriods": 0, "isLab": False},
         ],
         "classrooms": [
-            {"id": f"c{i}", "name": f"Room {i}", "capacity": 60, "type": "LECTURE",
+            {"id": f"c{i}", "name": f"Room {i}", "capacity": 80, "type": "LECTURE",
              "equipment": [], "isLab": False, "isAvailable": True}
             for i in range(1, n_teachers + 2)  # plenty of rooms
         ],
@@ -332,6 +503,12 @@ def _make_base(n_teachers: int, n_timeslots: int) -> dict:
 def test_parallel_batches_b1_b2_b3_distinct_resources():
     """B1/B2/B3 can share a timeslot when teachers and rooms differ."""
     p = _make_base(n_teachers=3, n_timeslots=1)
+    p["timeslots"] = [
+        {"id": "ts1", "day": "MONDAY", "startTime": "09:00", "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:00", "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
+    ]
+    for classroom in p["classrooms"][:3]:
+        classroom.update({"capacity": 20, "type": "LAB", "isLab": True})
     p["batches"] = [
         {"id": "b1", "semesterId": "sem1", "code": "B1", "studentCount": 20},
         {"id": "b2", "semesterId": "sem1", "code": "B2", "studentCount": 20},
@@ -339,18 +516,18 @@ def test_parallel_batches_b1_b2_b3_distinct_resources():
     ]
     p["teachingAssignments"] = [
         {"id": "a1", "teacherId": "t1", "subjectId": "s1", "semesterId": "sem1",
-         "batchId": "b1", "classroomId": "c1", "periodsPerWeek": 1, "isLab": False, "classroomRequirements": []},
+         "batchId": "b1", "classroomId": "c1", "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
         {"id": "a2", "teacherId": "t2", "subjectId": "s1", "semesterId": "sem1",
-         "batchId": "b2", "classroomId": "c2", "periodsPerWeek": 1, "isLab": False, "classroomRequirements": []},
+         "batchId": "b2", "classroomId": "c2", "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
         {"id": "a3", "teacherId": "t3", "subjectId": "s1", "semesterId": "sem1",
-         "batchId": "b3", "classroomId": "c3", "periodsPerWeek": 1, "isLab": False, "classroomRequirements": []},
+         "batchId": "b3", "classroomId": "c3", "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
     ]
     res = client.post("/generate", json=p).json()
     assert res["success"] is True
     scheduled_slots = [e["timeSlotId"] for e in res["timetable"]]
-    # All 3 should land in the only timeslot ts1
-    assert len(res["timetable"]) == 3
-    assert all(s == "ts1" for s in scheduled_slots)
+    # All three batch practicals should share the same two-period block.
+    assert len(res["timetable"]) == 6
+    assert set(scheduled_slots) == {"ts1", "ts2"}
 
 
 # ---------------------------------------------------------------------------
@@ -575,8 +752,13 @@ def test_arbitrary_batch_codes_parallel():
 # ---------------------------------------------------------------------------
 
 def test_multi_period_lab_blocks_resources_each_period():
-    """A 2-period lab must block the batch/teacher/room in BOTH consecutive slots."""
+    """A batch practical occupies two adjacent weekly periods in one lab room."""
     p = _make_base(n_teachers=2, n_timeslots=3)
+    p["timeslots"] = [
+        {"id": "ts1", "day": "MONDAY", "startTime": "09:00", "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:00", "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
+        {"id": "ts3", "day": "TUESDAY", "startTime": "09:00", "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+    ]
     # Override subject to be a 2-period lab
     p["subjects"] = [
         {"id": "lab1", "name": "Lab A", "code": "LA", "weeklyPeriods": 2,
@@ -584,6 +766,7 @@ def test_multi_period_lab_blocks_resources_each_period():
         {"id": "theory1", "name": "Theory B", "code": "TB", "weeklyPeriods": 1,
          "lecturePeriods": 1, "labPeriods": 0, "isLab": False},
     ]
+    p["classrooms"][0]["capacity"] = 80
     # Add a lab room
     p["classrooms"].append({"id": "lab_room", "name": "Lab Room", "capacity": 60,
                              "type": "LAB", "equipment": [], "isLab": True, "isAvailable": True})
@@ -591,7 +774,7 @@ def test_multi_period_lab_blocks_resources_each_period():
         {"id": "b1", "semesterId": "sem1", "code": "B1", "studentCount": 20},
     ]
     p["teachingAssignments"] = [
-        # B1 does a 2-period lab with t1 in lab_room
+        # B1 does a two-period practical with t1 in lab_room
         {"id": "a_lab", "teacherId": "t1", "subjectId": "lab1", "semesterId": "sem1",
          "batchId": "b1", "classroomId": "lab_room", "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
         # Same teacher cannot teach theory at the same time as the lab
@@ -600,10 +783,72 @@ def test_multi_period_lab_blocks_resources_each_period():
     ]
     res = client.post("/generate", json=p).json()
     assert res["success"] is True
-    lab_slots = {e["timeSlotId"] for e in res["timetable"] if e["subjectId"] == "lab1"}
+    lab_entries = [e for e in res["timetable"] if e["subjectId"] == "lab1"]
+    lab_entries.sort(key=lambda entry: entry["startTime"])
+    lab_slots = {e["timeSlotId"] for e in lab_entries}
     theory_slot = next(e["timeSlotId"] for e in res["timetable"] if e["subjectId"] == "theory1")
+    assert len(lab_entries) == 2
+    assert {entry["classroomId"] for entry in lab_entries} == {"lab_room"}
+    assert lab_entries[0]["endTime"] == lab_entries[1]["startTime"]
     # The theory period must not overlap with any of the lab's periods
     assert theory_slot not in lab_slots
+
+
+def test_lab_block_cannot_cross_lunch():
+    p = _make_base(n_teachers=1, n_timeslots=2)
+    p["timeslots"] = [
+        {"id": "before_lunch", "day": "MONDAY", "startTime": "11:30", "endTime": "12:30", "periodNumber": 4, "isBreak": False, "isActive": True},
+        {"id": "after_lunch", "day": "MONDAY", "startTime": "13:30", "endTime": "14:15", "periodNumber": 6, "isBreak": False, "isActive": True},
+    ]
+    p["subjects"] = [
+        {"id": "lab", "name": "Practical", "code": "PL", "weeklyPeriods": 2,
+         "lecturePeriods": 0, "labPeriods": 2, "isLab": True},
+    ]
+    p["classrooms"] = [
+        {"id": "lab_room", "name": "Lab", "capacity": 20, "type": "LAB",
+         "equipment": [], "isLab": True, "isAvailable": True},
+    ]
+    p["batches"] = [{"id": "b1", "semesterId": "sem1", "code": "B1", "studentCount": 20}]
+    p["teachingAssignments"] = [
+        {"id": "a1", "teacherId": "t1", "subjectId": "lab", "semesterId": "sem1",
+         "batchId": "b1", "classroomId": "lab_room", "periodsPerWeek": 2,
+         "isLab": True, "classroomRequirements": []},
+    ]
+
+    response = client.post("/generate", json=p).json()
+    assert response["success"] is False
+    assert any(violation["type"] == "NO_VALID_LAB_BLOCK" for violation in response["violations"])
+
+
+def test_batch_has_at_most_one_practical_block_per_day():
+    p = _make_base(n_teachers=2, n_timeslots=4)
+    p["timeslots"] = [
+        {"id": "ts1", "day": "MONDAY", "startTime": "09:00", "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:00", "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
+        {"id": "ts3", "day": "MONDAY", "startTime": "11:00", "endTime": "12:00", "periodNumber": 3, "isBreak": False, "isActive": True},
+        {"id": "ts4", "day": "MONDAY", "startTime": "12:00", "endTime": "13:00", "periodNumber": 4, "isBreak": False, "isActive": True},
+    ]
+    p["subjects"] = [
+        {"id": f"lab{i}", "name": f"Practical {i}", "code": f"PL{i}", "weeklyPeriods": 2,
+         "lecturePeriods": 0, "labPeriods": 2, "isLab": True}
+        for i in (1, 2)
+    ]
+    p["classrooms"] = [
+        {"id": f"room{i}", "name": f"Lab {i}", "capacity": 20, "type": "LAB",
+         "equipment": [], "isLab": True, "isAvailable": True}
+        for i in (1, 2)
+    ]
+    p["batches"] = [{"id": "b1", "semesterId": "sem1", "code": "B1", "studentCount": 20}]
+    p["teachingAssignments"] = [
+        {"id": f"a{i}", "teacherId": f"t{i}", "subjectId": f"lab{i}", "semesterId": "sem1",
+         "batchId": "b1", "classroomId": f"room{i}", "periodsPerWeek": 2,
+         "isLab": True, "classroomRequirements": []}
+        for i in (1, 2)
+    ]
+
+    response = client.post("/generate", json=p).json()
+    assert response["success"] is False
+
 
 
 # ---------------------------------------------------------------------------
@@ -645,9 +890,10 @@ def test_same_teacher_four_batches_must_be_spread_across_slots():
     """
     days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"]
     timeslots = [
-        {"id": f"ts{i}", "day": days[i-1], "startTime": f"{8+i}:00",
-         "endTime": f"{9+i}:00", "periodNumber": i, "isBreak": False, "isActive": True}
-        for i in range(1, 5)   # 4 time slots on 4 different days
+        {"id": f"ts{i}p{period}", "day": day, "startTime": start, "endTime": end,
+         "periodNumber": period, "isBreak": False, "isActive": True}
+        for i, day in enumerate(days[:4], start=1)
+        for period, start, end in [(1, "09:00", "10:00"), (2, "10:00", "11:00")]
     ]
     p = {
         "teachers": [
@@ -661,7 +907,7 @@ def test_same_teacher_four_batches_must_be_spread_across_slots():
         ],
         "subjects": [
             {"id": "px", "name": "Practical X", "code": "PX",
-             "weeklyPeriods": 1, "lecturePeriods": 0, "labPeriods": 1, "isLab": True}
+             "weeklyPeriods": 2, "lecturePeriods": 0, "labPeriods": 2, "isLab": True}
         ],
         "classrooms": [
             {"id": f"lab{i}", "name": f"Lab {i}", "capacity": 20,
@@ -678,7 +924,7 @@ def test_same_teacher_four_batches_must_be_spread_across_slots():
             # Same teacher (tx), same subject (px), but DIFFERENT batches and rooms
             {"id": f"a{i}", "teacherId": "tx", "subjectId": "px",
              "semesterId": "sem1", "batchId": f"b{i}",
-             "classroomId": f"lab{i}", "periodsPerWeek": 1,
+             "classroomId": f"lab{i}", "periodsPerWeek": 2,
              "isLab": True, "classroomRequirements": []}
             for i in range(1, 5)
         ],
@@ -698,20 +944,17 @@ def test_same_teacher_four_batches_must_be_spread_across_slots():
 
     res = client.post("/generate", json=p).json()
 
-    # Must be feasible — 4 sessions, 4 slots, 4 separate rooms
+    # Must be feasible — each batch needs one paired lab, spread for the teacher.
     assert res["success"] is True, f"Expected feasible but got: {res.get('violations') or res.get('errorMessage')}"
-    assert len(res["timetable"]) == 4
+    assert len(res["timetable"]) == 8
 
-    # KEY ASSERTION: all 4 entries must be in DIFFERENT time slots
-    # (teacher conflict constraint forces this)
-    scheduled_slots = [e["timeSlotId"] for e in res["timetable"]]
-    assert len(set(scheduled_slots)) == 4, (
-        f"Same teacher scheduled in overlapping slots! Slots: {scheduled_slots}"
-    )
-
-    # Each batch must appear exactly once
-    scheduled_batches = [e["batchId"] for e in res["timetable"]]
-    assert set(scheduled_batches) == {"b1", "b2", "b3", "b4"}
+    # The teacher must be assigned to four distinct daily blocks.
+    scheduled_days = {entry["batchId"]: set() for entry in res["timetable"]}
+    for entry in res["timetable"]:
+        scheduled_days[entry["batchId"]].add(entry["day"])
+    assert all(len(batch_days) == 1 for batch_days in scheduled_days.values())
+    assert len({next(iter(batch_days)) for batch_days in scheduled_days.values()}) == 4
+    assert {entry["batchId"] for entry in res["timetable"]} == {"b1", "b2", "b3", "b4"}
 
 
 def test_same_teacher_four_batches_infeasible_with_one_slot():
@@ -732,7 +975,7 @@ def test_same_teacher_four_batches_infeasible_with_one_slot():
         ],
         "subjects": [
             {"id": "px", "name": "Practical X", "code": "PX",
-             "weeklyPeriods": 1, "lecturePeriods": 0, "labPeriods": 1, "isLab": True}
+             "weeklyPeriods": 2, "lecturePeriods": 0, "labPeriods": 2, "isLab": True}
         ],
         "classrooms": [
             {"id": f"lab{i}", "name": f"Lab {i}", "capacity": 20,
@@ -746,12 +989,14 @@ def test_same_teacher_four_batches_infeasible_with_one_slot():
         ],
         "timeslots": [
             {"id": "ts1", "day": "MONDAY", "startTime": "09:00",
-             "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True}
-        ],  # Only ONE slot — impossible to fit 4 sessions
+             "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+            {"id": "ts2", "day": "MONDAY", "startTime": "10:00",
+             "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
+        ],
         "teachingAssignments": [
             {"id": f"a{i}", "teacherId": "tx", "subjectId": "px",
              "semesterId": "sem1", "batchId": f"b{i}",
-             "classroomId": f"lab{i}", "periodsPerWeek": 1,
+             "classroomId": f"lab{i}", "periodsPerWeek": 2,
              "isLab": True, "classroomRequirements": []}
             for i in range(1, 5)
         ],
@@ -798,8 +1043,8 @@ def test_four_different_teachers_four_batches_can_run_in_parallel():
             for i in range(1, 5)
         ],
         "subjects": [
-            {"id": f"p{i}", "name": f"Practical {i}", "code": f"P{i}",
-             "weeklyPeriods": 1, "lecturePeriods": 0, "labPeriods": 1, "isLab": True}
+             {"id": f"p{i}", "name": f"Practical {i}", "code": f"P{i}",
+             "weeklyPeriods": 2, "lecturePeriods": 0, "labPeriods": 2, "isLab": True}
             for i in range(1, 5)
         ],
         "classrooms": [
@@ -813,15 +1058,17 @@ def test_four_different_teachers_four_batches_can_run_in_parallel():
             for i in range(1, 5)
         ],
         "timeslots": [
-            # Only ONE time slot — all 4 must fit in it (parallel execution)
+            # Two consecutive periods — all 4 practicals can run in parallel
             {"id": "ts1", "day": "MONDAY", "startTime": "09:00",
-             "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True}
+             "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+            {"id": "ts2", "day": "MONDAY", "startTime": "10:00",
+             "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True}
         ],
         "teachingAssignments": [
             # Each batch → its own teacher and its own lab
             {"id": f"a{i}", "teacherId": f"t{i}", "subjectId": f"p{i}",
              "semesterId": "sem1", "batchId": f"b{i}",
-             "classroomId": f"lab{i}", "periodsPerWeek": 1,
+             "classroomId": f"lab{i}", "periodsPerWeek": 2,
              "isLab": True, "classroomRequirements": []}
             for i in range(1, 5)
         ],
@@ -843,12 +1090,12 @@ def test_four_different_teachers_four_batches_can_run_in_parallel():
 
     # Must be feasible — no shared teacher, no shared room, different batches
     assert res["success"] is True, f"Expected feasible but got: {res.get('violations') or res.get('errorMessage')}"
-    assert len(res["timetable"]) == 4
+    assert len(res["timetable"]) == 8
 
     # KEY ASSERTION: all 4 MUST run in the SAME slot (parallel execution)
     scheduled_slots = [e["timeSlotId"] for e in res["timetable"]]
-    assert all(s == "ts1" for s in scheduled_slots), (
-        f"Expected all 4 batches in ts1 but got: {scheduled_slots}"
+    assert set(scheduled_slots) == {"ts1", "ts2"}, (
+        f"Expected all labs in ts1 but got: {scheduled_slots}"
     )
 
     # Each batch appears exactly once, each teacher appears exactly once
@@ -891,10 +1138,10 @@ def test_theory_at_same_slot_as_batch_labs_is_infeasible():
             {"id": "sTheory", "name": "Java Theory", "code": "JT",
              "weeklyPeriods": 1, "lecturePeriods": 1, "labPeriods": 0, "isLab": False},
             {"id": "sLab", "name": "Java Lab", "code": "JL",
-             "weeklyPeriods": 1, "lecturePeriods": 0, "labPeriods": 1, "isLab": True},
+             "weeklyPeriods": 2, "lecturePeriods": 0, "labPeriods": 2, "isLab": True},
         ],
         "classrooms": [
-            {"id": "room1", "name": "Lecture Hall", "capacity": 60,
+            {"id": "room1", "name": "Lecture Hall", "capacity": 80,
              "type": "LECTURE", "equipment": [], "isLab": False, "isAvailable": True},
             {"id": "lab1", "name": "Lab 1", "capacity": 20,
              "type": "LAB", "equipment": [], "isLab": True, "isAvailable": True},
@@ -903,10 +1150,10 @@ def test_theory_at_same_slot_as_batch_labs_is_infeasible():
         "batches": [
             {"id": "b1", "semesterId": "sem1", "code": "B1", "studentCount": 15}
         ],
-        # Only ONE time slot — theory + B1 lab both need it → INFEASIBLE (ALL blocks B1)
+          # The lecture and one-period lab compete for the only slot.
         "timeslots": [
             {"id": "ts1", "day": "MONDAY", "startTime": "09:00",
-             "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True}
+                 "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True}
         ],
         "teachingAssignments": [
             # Theory: batchId absent/None → ALL-scope
@@ -964,10 +1211,10 @@ def test_theory_and_batch_labs_at_different_slots_is_feasible():
             {"id": "sTheory", "name": "Java Theory", "code": "JT",
              "weeklyPeriods": 1, "lecturePeriods": 1, "labPeriods": 0, "isLab": False},
             {"id": "sLab", "name": "Java Lab", "code": "JL",
-             "weeklyPeriods": 1, "lecturePeriods": 0, "labPeriods": 1, "isLab": True},
+             "weeklyPeriods": 2, "lecturePeriods": 0, "labPeriods": 2, "isLab": True},
         ],
         "classrooms": [
-            {"id": "room1", "name": "Lecture Hall", "capacity": 60,
+            {"id": "room1", "name": "Lecture Hall", "capacity": 80,
              "type": "LECTURE", "equipment": [], "isLab": False, "isAvailable": True},
             {"id": "lab1", "name": "Lab 1", "capacity": 20,
              "type": "LAB", "equipment": [], "isLab": True, "isAvailable": True},
@@ -976,12 +1223,14 @@ def test_theory_and_batch_labs_at_different_slots_is_feasible():
         "batches": [
             {"id": "b1", "semesterId": "sem1", "code": "B1", "studentCount": 15}
         ],
-        # TWO slots — theory can go in ts1, lab can go in ts2
+        # Lecture and batch lab use different slots.
         "timeslots": [
             {"id": "ts1", "day": "MONDAY", "startTime": "09:00",
              "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
-            {"id": "ts2", "day": "TUESDAY", "startTime": "09:00",
-             "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+            {"id": "ts2", "day": "MONDAY", "startTime": "10:00",
+             "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
+            {"id": "ts3", "day": "MONDAY", "startTime": "11:00",
+             "endTime": "12:00", "periodNumber": 3, "isBreak": False, "isActive": True},
         ],
         "teachingAssignments": [
             {"id": "aTheory", "teacherId": "tTheory", "subjectId": "sTheory",
@@ -989,7 +1238,7 @@ def test_theory_and_batch_labs_at_different_slots_is_feasible():
              "isLab": False, "classroomRequirements": []},
             {"id": "aLab", "teacherId": "tLab", "subjectId": "sLab",
              "semesterId": "sem1", "batchId": "b1", "classroomId": "lab1",
-             "periodsPerWeek": 1, "isLab": True, "classroomRequirements": []},
+             "periodsPerWeek": 2, "isLab": True, "classroomRequirements": []},
         ],
         "hardConstraints": {
             "enforceTeacherConflicts": True,
@@ -1007,12 +1256,13 @@ def test_theory_and_batch_labs_at_different_slots_is_feasible():
 
     res = client.post("/generate", json=p).json()
     assert res["success"] is True, f"Expected feasible but got: {res.get('violations') or res.get('errorMessage')}"
-    assert len(res["timetable"]) == 2
+    assert len(res["timetable"]) == 3
 
     # Theory and lab must be in DIFFERENT slots
-    slots = {e["subjectId"]: e["timeSlotId"] for e in res["timetable"]}
-    assert slots["sTheory"] != slots["sLab"], (
-        f"Theory and lab assigned to same slot! theory={slots['sTheory']}, lab={slots['sLab']}"
+    lab_slots = {e["timeSlotId"] for e in res["timetable"] if e["subjectId"] == "sLab"}
+    theory_slot = next(e["timeSlotId"] for e in res["timetable"] if e["subjectId"] == "sTheory")
+    assert theory_slot not in lab_slots, (
+        f"Theory and lab assigned to same slot! theory={theory_slot}, lab={lab_slots}"
     )
 
 
@@ -1228,7 +1478,7 @@ def test_batch_labs_b1_b2_b3_b4_run_in_parallel():
     p = _make_sem357_base()
     p["subjects"] = [
         {"id": "s_lab", "name": "OS Lab", "code": "OSL",
-         "weeklyPeriods": 1, "lecturePeriods": 0, "labPeriods": 1, "isLab": True},
+         "weeklyPeriods": 2, "lecturePeriods": 0, "labPeriods": 2, "isLab": True},
     ]
     p["teachers"] = [
         {"id": f"t{i}", "name": f"Lab Teacher {i}",
@@ -1238,10 +1488,12 @@ def test_batch_labs_b1_b2_b3_b4_run_in_parallel():
          "isMaxWeeklySourceDefined": False}
         for i in range(1, 5)
     ]
-    # Restrict to a single time slot so all 4 MUST use it if feasible
+    # Restrict to one two-period block so all 4 practicals run in parallel.
     p["timeslots"] = [
         {"id": "ts1", "day": "MONDAY", "startTime": "09:00",
-         "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True}
+         "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:00",
+         "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True}
     ]
     p["classrooms"] = [
         {"id": f"lab{i}", "name": f"Lab {i}", "capacity": 20,
@@ -1251,7 +1503,7 @@ def test_batch_labs_b1_b2_b3_b4_run_in_parallel():
     p["teachingAssignments"] = [
         {"id": f"a{i}", "teacherId": f"t{i}", "subjectId": "s_lab",
          "semesterId": "sem3", "batchId": f"sem3_b{i}",
-         "classroomId": f"lab{i}", "periodsPerWeek": 1,
+         "classroomId": f"lab{i}", "periodsPerWeek": 2,
          "isLab": True, "classroomRequirements": []}
         for i in range(1, 5)
     ]
@@ -1259,10 +1511,10 @@ def test_batch_labs_b1_b2_b3_b4_run_in_parallel():
     assert res["success"] is True, (
         f"B1-B4 parallel labs must be feasible. Violations: {res.get('violations')}"
     )
-    assert len(res["timetable"]) == 4
-    # All four must use the single available time slot
-    assert all(e["timeSlotId"] == "ts1" for e in res["timetable"]), (
-        f"Expected all labs in ts1 but got: {[e['timeSlotId'] for e in res['timetable']]}"
+    assert len(res["timetable"]) == 8
+    # All four batch-specific practicals share both periods with distinct rooms and teachers.
+    assert {e["timeSlotId"] for e in res["timetable"]} == {"ts1", "ts2"}, (
+        f"Expected all labs in ts1/ts2 but got: {[e['timeSlotId'] for e in res['timetable']]}"
     )
     assert {e["batchId"] for e in res["timetable"]} == {
         "sem3_b1", "sem3_b2", "sem3_b3", "sem3_b4"
@@ -1304,13 +1556,14 @@ def test_same_teacher_lab_b1_and_b2_same_slot_infeasible():
     p["teachingAssignments"] = [
         {"id": "a1", "teacherId": "t_single", "subjectId": "s_lab",
          "semesterId": "sem3", "batchId": "sem3_b1",
-         "classroomId": "lab1", "periodsPerWeek": 1,
+             "classroomId": "lab1", "periodsPerWeek": 2,
          "isLab": True, "classroomRequirements": []},
         {"id": "a2", "teacherId": "t_single", "subjectId": "s_lab",
          "semesterId": "sem3", "batchId": "sem3_b2",
-         "classroomId": "lab2", "periodsPerWeek": 1,
+             "classroomId": "lab2", "periodsPerWeek": 2,
          "isLab": True, "classroomRequirements": []},
     ]
+    p["hardConstraints"] = {key: False for key in p["hardConstraints"]}
     res = client.post("/generate", json=p).json()
     assert res["success"] is False, (
         "Same teacher for B1 and B2 labs with only one slot must be infeasible"
@@ -1337,8 +1590,12 @@ def test_same_teacher_lab_b1_and_b2_two_slots_feasible():
     p["timeslots"] = [
         {"id": "ts1", "day": "MONDAY", "startTime": "09:00",
          "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
-        {"id": "ts2", "day": "TUESDAY", "startTime": "09:00",
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:00",
+         "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
+        {"id": "ts3", "day": "TUESDAY", "startTime": "09:00",
          "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts4", "day": "TUESDAY", "startTime": "10:00",
+         "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
     ]
     p["classrooms"] = [
         {"id": "lab1", "name": "Lab 1", "capacity": 20,
@@ -1349,11 +1606,11 @@ def test_same_teacher_lab_b1_and_b2_two_slots_feasible():
     p["teachingAssignments"] = [
         {"id": "a1", "teacherId": "t_single", "subjectId": "s_lab",
          "semesterId": "sem3", "batchId": "sem3_b1",
-         "classroomId": "lab1", "periodsPerWeek": 1,
+             "classroomId": "lab1", "periodsPerWeek": 2,
          "isLab": True, "classroomRequirements": []},
         {"id": "a2", "teacherId": "t_single", "subjectId": "s_lab",
          "semesterId": "sem3", "batchId": "sem3_b2",
-         "classroomId": "lab2", "periodsPerWeek": 1,
+             "classroomId": "lab2", "periodsPerWeek": 2,
          "isLab": True, "classroomRequirements": []},
     ]
     res = client.post("/generate", json=p).json()
@@ -1381,7 +1638,7 @@ def test_same_lab_room_for_b1_and_b2_same_slot_infeasible():
     p = _make_sem357_base()
     p["subjects"] = [
         {"id": "s_lab", "name": "Network Lab", "code": "NL",
-         "weeklyPeriods": 1, "lecturePeriods": 0, "labPeriods": 1, "isLab": True},
+         "weeklyPeriods": 2, "lecturePeriods": 0, "labPeriods": 2, "isLab": True},
     ]
     p["teachers"] = [
         {"id": "t1", "name": "Teacher 1",
@@ -1396,8 +1653,8 @@ def test_same_lab_room_for_b1_and_b2_same_slot_infeasible():
          "isMaxWeeklySourceDefined": False},
     ]
     p["timeslots"] = [
-        {"id": "ts1", "day": "MONDAY", "startTime": "09:00",
-         "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True}
+        {"id": "ts1", "day": "MONDAY", "startTime": "09:00", "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:00", "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
     ]
     # Only ONE lab room — both batches must use the same room → conflict
     p["classrooms"] = [
@@ -1407,13 +1664,14 @@ def test_same_lab_room_for_b1_and_b2_same_slot_infeasible():
     p["teachingAssignments"] = [
         {"id": "a1", "teacherId": "t1", "subjectId": "s_lab",
          "semesterId": "sem3", "batchId": "sem3_b1",
-         "classroomId": "lab_shared", "periodsPerWeek": 1,
+         "classroomId": "lab_shared", "periodsPerWeek": 2,
          "isLab": True, "classroomRequirements": []},
         {"id": "a2", "teacherId": "t2", "subjectId": "s_lab",
          "semesterId": "sem3", "batchId": "sem3_b2",
-         "classroomId": "lab_shared", "periodsPerWeek": 1,
+         "classroomId": "lab_shared", "periodsPerWeek": 2,
          "isLab": True, "classroomRequirements": []},
     ]
+    p["hardConstraints"] = {key: False for key in p["hardConstraints"]}
     res = client.post("/generate", json=p).json()
     assert res["success"] is False, (
         "Two batches forced into the same lab room at the same slot must be infeasible"
@@ -1488,7 +1746,7 @@ def test_lecture_and_batch_labs_at_different_slots_feasible():
         {"id": "s_theory", "name": "OS Theory", "code": "OS",
          "weeklyPeriods": 1, "lecturePeriods": 1, "labPeriods": 0, "isLab": False},
         {"id": "s_lab", "name": "OS Lab", "code": "OSL",
-         "weeklyPeriods": 1, "lecturePeriods": 0, "labPeriods": 1, "isLab": True},
+         "weeklyPeriods": 2, "lecturePeriods": 0, "labPeriods": 2, "isLab": True},
     ]
     p["teachers"] = [
         {"id": "t_theory", "name": "Theory Teacher",
@@ -1505,8 +1763,10 @@ def test_lecture_and_batch_labs_at_different_slots_feasible():
     p["timeslots"] = [
         {"id": "ts1", "day": "MONDAY", "startTime": "09:00",
          "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
-        {"id": "ts2", "day": "TUESDAY", "startTime": "09:00",
-         "endTime": "10:00", "periodNumber": 1, "isBreak": False, "isActive": True},
+        {"id": "ts2", "day": "MONDAY", "startTime": "10:00",
+         "endTime": "11:00", "periodNumber": 2, "isBreak": False, "isActive": True},
+        {"id": "ts3", "day": "MONDAY", "startTime": "11:00",
+         "endTime": "12:00", "periodNumber": 3, "isBreak": False, "isActive": True},
     ]
     p["classrooms"] = [
         {"id": "lh1", "name": "Lecture Hall 1", "capacity": 80,
@@ -1520,15 +1780,17 @@ def test_lecture_and_batch_labs_at_different_slots_feasible():
          "periodsPerWeek": 1, "isLab": False, "classroomRequirements": []},
         {"id": "a_lab", "teacherId": "t_lab", "subjectId": "s_lab",
          "semesterId": "sem3", "batchId": "sem3_b1",
-         "classroomId": "lab1", "periodsPerWeek": 1,
+         "classroomId": "lab1", "periodsPerWeek": 2,
          "isLab": True, "classroomRequirements": []},
     ]
+    p["hardConstraints"] = {key: False for key in p["hardConstraints"]}
     res = client.post("/generate", json=p).json()
     assert res["success"] is True, (
         f"Lecture at ts1 and lab at ts2 must be feasible. Violations: {res.get('violations')}"
     )
-    slots = {e["subjectId"]: e["timeSlotId"] for e in res["timetable"]}
-    assert slots["s_theory"] != slots["s_lab"], (
+    lab_slots = {e["timeSlotId"] for e in res["timetable"] if e["subjectId"] == "s_lab"}
+    theory_slot = next(e["timeSlotId"] for e in res["timetable"] if e["subjectId"] == "s_theory")
+    assert theory_slot not in lab_slots, (
         "Lecture and lab must be in different slots"
     )
 
@@ -1542,12 +1804,12 @@ def test_full_sem3_lecture_3periods_plus_parallel_labs():
     """
     Realistic scenario for Semester 3:
       - 1 LECTURE subject: 3 periods/week, batchId=NULL, needs room capacity >= 80
-      - 1 LAB subject:     1 period/week per batch (B1/B2/B3/B4), each uses own
+    - 1 LAB subject:     1 period/week per batch (B1/B2/B3/B4), each uses own
                            teacher and lab room; all 4 labs CAN run in parallel.
 
     The scheduler MUST:
       1. Place 3 lecture periods (no batchId) in a large room.
-      2. Place 4 lab periods in 4 separate lab rooms simultaneously.
+    2. Place 4 batch lab periods simultaneously in their own rooms.
       3. Ensure lecture periods and lab periods DO NOT overlap (ALL vs BATCH).
     """
     days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"]
@@ -1569,7 +1831,7 @@ def test_full_sem3_lecture_3periods_plus_parallel_labs():
             {"id": "s_lec", "name": "Data Structures", "code": "DS",
              "weeklyPeriods": 3, "lecturePeriods": 3, "labPeriods": 0, "isLab": False},
             {"id": "s_lab", "name": "DS Lab", "code": "DSL",
-             "weeklyPeriods": 1, "lecturePeriods": 0, "labPeriods": 1, "isLab": True},
+             "weeklyPeriods": 2, "lecturePeriods": 0, "labPeriods": 2, "isLab": True},
         ],
         "classrooms": [
             # One large lecture hall (cap=80) — the only non-lab room
@@ -1607,7 +1869,7 @@ def test_full_sem3_lecture_3periods_plus_parallel_labs():
             # Batch-specific labs
             {"id": f"a_lab{i}", "teacherId": f"t_lab{i}", "subjectId": "s_lab",
              "semesterId": "sem3", "batchId": f"b{i}",
-             "classroomId": f"lab{i}", "periodsPerWeek": 1,
+             "classroomId": f"lab{i}", "periodsPerWeek": 2,
              "isLab": True, "classroomRequirements": []}
             for i in range(1, 5)
         ],
@@ -1631,14 +1893,14 @@ def test_full_sem3_lecture_3periods_plus_parallel_labs():
         f"Violations: {res.get('violations')} | Error: {res.get('errorMessage')}"
     )
     entries = res["timetable"]
-    # 3 lecture periods + 4 lab periods = 7 total
-    assert len(entries) == 7, f"Expected 7 entries, got {len(entries)}"
+    # 3 lecture periods + 8 batch practical periods = 11 total
+    assert len(entries) == 11, f"Expected 11 entries, got {len(entries)}"
 
     lec_entries = [e for e in entries if e["subjectId"] == "s_lec"]
     lab_entries = [e for e in entries if e["subjectId"] == "s_lab"]
 
     assert len(lec_entries) == 3
-    assert len(lab_entries) == 4
+    assert len(lab_entries) == 8
 
     # All lecture entries have batchId=None
     assert all(e.get("batchId") is None for e in lec_entries), (
@@ -1656,7 +1918,6 @@ def test_full_sem3_lecture_3periods_plus_parallel_labs():
 
     # Lab entries must cover all 4 batches
     assert {e["batchId"] for e in lab_entries} == {"b1", "b2", "b3", "b4"}
-
     # No lecture and lab in the same time slot (ALL vs BATCH rule)
     lab_slots = {e["timeSlotId"] for e in lab_entries}
     lec_slot_set = set(lec_slots)

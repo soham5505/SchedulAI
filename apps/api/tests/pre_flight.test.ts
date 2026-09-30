@@ -56,7 +56,10 @@ function makeCtx(overrides: Partial<PreFlightContext> = {}): PreFlightContext {
     validSubjectIds: new Set([subjectId]),
     validSemesterIds: new Set([semesterId]),
     validBatchIds: new Set([batchId]),
+    batchSemesterMap: new Map([[batchId, semesterId]]),
+    batchCodeMap: new Map([[batchId, 'B1']]),
     availableClassroomIds: new Set([classroomId]),
+    classroomIsLabMap: new Map([[classroomId, false]]),
     semesterBatchStudentSum: new Map([[semesterId, 0]]),
     maxLectureRoomCapacity: 80,
     classroomCapacityMap: new Map([[classroomId, 80]]),
@@ -251,6 +254,7 @@ describe('PreFlightValidator', () => {
     const badAssignment = {
       ...base.assignments[0],
       _id: NEW_ID(),
+      subjectId: { _id: NEW_ID() },
       teacherId: { _id: staleTeacherId, availability: ['MONDAY'] },
     };
 

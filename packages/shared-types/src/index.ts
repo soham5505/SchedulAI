@@ -14,7 +14,7 @@ export type GenerationStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 
 
 export type ImportJobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
-export type ImportType = 'TEACHERS' | 'SUBJECTS' | 'CLASSROOMS' | 'SEMESTERS' | 'TIMESLOTS' | 'ASSIGNMENTS' | 'TIMETABLE';
+export type ImportType = 'TEACHERS' | 'SUBJECTS' | 'CLASSROOMS' | 'SEMESTERS' | 'TIMESLOTS' | 'ASSIGNMENTS' | 'TIMETABLE' | 'MASTER';
 
 export type AuditAction =
   | 'LOGIN'
@@ -130,6 +130,19 @@ export interface IBatch {
   updatedAt: string | Date;
 }
 
+export interface IRoomReservation {
+  _id: string;
+  classroomId: string | IClassroom;
+  departmentId: string | IDepartment;
+  dayOfWeek: DayOfWeek;
+  startPeriod: number;
+  endPeriod: number;
+  reason: string;
+  isActive: boolean;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
 export interface ITimeSlot {
   _id: string;
   day: DayOfWeek;
@@ -157,6 +170,7 @@ export interface ITeachingAssignment {
 
 export interface ITimetableEntry {
   _id: string;
+  assignmentId?: string;
   semesterId: string | ISemester;
   batchId?: string | IBatch | null;
   subjectId: string | ISubject;
@@ -212,7 +226,7 @@ export interface IGeneration {
   score: number;
   errorMessage?: string;
   violations?: ISchedulerViolation[];
-  statistics?: Record<string, unknown>;
+  assignmentId?: string;
   createdBy: string | IUser;
   version?: number;
   createdAt: string | Date;
@@ -328,12 +342,23 @@ export interface ISchedulerBatchInput {
   studentCount: number;
 }
 
+export interface ISchedulerRoomBlockInput {
+  id?: string;
+  classroomId: string;
+  departmentId?: string;
+  dayOfWeek: DayOfWeek;
+  startPeriod: number;
+  duration: number;
+  reason?: string;
+}
+
 export interface ISchedulerInput {
   teachers: ISchedulerTeacherInput[];
   subjects: ISchedulerSubjectInput[];
   classrooms: ISchedulerClassroomInput[];
   semesters: ISchedulerSemesterInput[];
   batches?: ISchedulerBatchInput[];
+  roomBlocks?: ISchedulerRoomBlockInput[];
   timeslots: ISchedulerTimeSlotInput[];
   teachingAssignments: ISchedulerAssignmentInput[];
   hardConstraints?: Partial<IHardConstraints>;
@@ -343,6 +368,7 @@ export interface ISchedulerInput {
 }
 
 export interface ISchedulerEntryOutput {
+  assignmentId?: string;
   semesterId: string;
   batchId?: string;
   subjectId: string;

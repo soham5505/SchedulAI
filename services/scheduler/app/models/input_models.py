@@ -85,6 +85,21 @@ class TimeSlotInput(BaseModel):
     label: Optional[str] = None
 
 
+class RoomBlockInput(BaseModel):
+    """A recurring room reservation expressed in teaching-period numbers.
+
+    The reservation owner is retained for display/auditing, but generation
+    treats every block as unavailable to every department.
+    """
+    id: Optional[str] = None
+    classroomId: str
+    departmentId: Optional[str] = None
+    dayOfWeek: DayOfWeek
+    startPeriod: int = Field(ge=1)
+    duration: int = Field(ge=1)
+    reason: Optional[str] = None
+
+
 class AssignmentInput(BaseModel):
     id: str
     teacherId: str
@@ -129,6 +144,7 @@ class GenerateRequest(BaseModel):
     semesters: List[SemesterInput]
     batches: List[BatchInput] = Field(default_factory=list)
     timeslots: List[TimeSlotInput]
+    roomBlocks: List[RoomBlockInput] = Field(default_factory=list)
     teachingAssignments: List[AssignmentInput]
     hardConstraints: Optional[HardConstraintsInput] = Field(default_factory=HardConstraintsInput)
     softConstraints: Optional[SoftConstraintsInput] = Field(default_factory=SoftConstraintsInput)
@@ -138,6 +154,7 @@ class GenerateRequest(BaseModel):
 
 class ExistingTimetableEntryInput(BaseModel):
     id: Optional[str] = None
+    assignmentId: Optional[str] = None
     semesterId: str
     batchId: Optional[str] = None
     subjectId: str

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import * as dotenv from 'dotenv';
+import '../models/index.js';
 import { GenerationService } from '../modules/generations/generation.service.js';
 import { SemesterModel } from '../models/semester.model.js';
 import { Logger } from '../utils/logger.js';
@@ -14,7 +15,10 @@ async function testRun() {
         logger.info('Connected to MongoDB');
 
         // Get active semesters that have assignments
-        const semesters = await SemesterModel.find({ isActive: true }).lean();
+        const semesters = await SemesterModel.find({
+            isActive: true,
+            name: /^SEM\s*(3|5|7)\s*-\s*B1$/i,
+        }).lean();
         const semesterIds = semesters.map((s) => s._id.toString());
 
         logger.info(`Semesters to generate: ${semesters.map(s => `${s.name} (${s._id})`).join(', ')}`);
@@ -32,7 +36,14 @@ async function testRun() {
         }, mockUser);
 
         logger.info('Generation completed successfully!');
-        logger.info(`Result: ${JSON.stringify(result)}`);
+        logger.info(`Result: ${JSON.stringify({
+            status: result.generation.status,
+            generationId: String(result.generation._id),
+            resultCount: result.generation.resultCount,
+            timetableEntries: result.timetable.length,
+            violations: result.violations?.length || 0,
+            errorMessage: result.errorMessage,
+        })}`);
 
         await mongoose.connection.close();
     } catch (error: any) {

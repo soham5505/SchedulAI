@@ -24,6 +24,7 @@ import { ImportPage } from './pages/ImportPage.js';
 import { ExportPage } from './pages/ExportPage.js';
 import { AuditLogsPage } from './pages/AuditLogsPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
+import { LabReservationsPage } from './pages/LabReservationsPage.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +63,7 @@ export const App: React.FC = () => {
                 <Route path="/semesters" element={<SemestersPage />} />
                 <Route path="/timeslots" element={<TimeSlotsPage />} />
                 <Route path="/assignments" element={<AssignmentsPage />} />
+                <Route path="/lab-reservations" element={<LabReservationsPage />} />
                 <Route path="/import" element={<ImportPage />} />
                 <Route path="/export" element={<ExportPage />} />
                 <Route path="/audit-logs" element={<AuditLogsPage />} />

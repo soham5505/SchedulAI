@@ -11,6 +11,7 @@ import { Input } from '../components/ui/Input.js';
 import { Select } from '../components/ui/Select.js';
 import { Badge } from '../components/ui/Badge.js';
 import { Plus, Edit2, Trash2, Clock, Wand2 } from 'lucide-react';
+import { formatTimeRange12Hour } from '../utils/timeFormat.js';
 
 export const TimeSlotsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -22,8 +23,8 @@ export const TimeSlotsPage: React.FC = () => {
 
   // Form states
   const [day, setDay] = useState<DayOfWeek>('MONDAY');
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('10:00');
+  const [startTime, setStartTime] = useState('09:15');
+  const [endTime, setEndTime] = useState('10:15');
   const [periodNumber, setPeriodNumber] = useState(1);
   const [isBreak, setIsBreak] = useState(false);
   const [label, setLabel] = useState('Period 1');
@@ -68,7 +69,7 @@ export const TimeSlotsPage: React.FC = () => {
   const bulkGenerateMutation = useMutation({
     mutationFn: async () => {
       const res = await apiClient.post<{ success: boolean; message: string }>('/timeslots/bulk-standard', {
-        days: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
+        days: DAYS_OF_WEEK,
       });
       return res.data;
     },
@@ -97,8 +98,8 @@ export const TimeSlotsPage: React.FC = () => {
   const handleOpenCreate = () => {
     setEditingSlot(null);
     setDay('MONDAY');
-    setStartTime('09:00');
-    setEndTime('10:00');
+    setStartTime('09:15');
+    setEndTime('10:15');
     setPeriodNumber(1);
     setIsBreak(false);
     setLabel('Period 1');
@@ -140,9 +141,10 @@ export const TimeSlotsPage: React.FC = () => {
       key: 'time',
       header: 'Time Range',
       render: (item) => (
-        <span className="flex items-center gap-1.5 font-mono text-xs text-slate-300">
-          <Clock className="w-3.5 h-3.5 text-slate-500" />
-          {item.startTime} – {item.endTime}
+        <span className="flex items-center gap-1.5 font-mono text-xs text-slate-200">
+          <Clock className="w-3.5 h-3.5 text-teal-400" />
+          <span>{formatTimeRange12Hour(item.startTime, item.endTime)}</span>
+          <span className="text-[10px] text-slate-500">({item.startTime}–{item.endTime})</span>
         </span>
       ),
     },
@@ -201,7 +203,7 @@ export const TimeSlotsPage: React.FC = () => {
             onClick={() => bulkGenerateMutation.mutate()}
             leftIcon={<Wand2 className="w-4 h-4 text-teal-400" />}
           >
-            Generate Standard 5-Day Schedule
+            Apply Reference 6-Day Schedule
           </Button>
           <Button variant="teal" size="sm" onClick={handleOpenCreate} leftIcon={<Plus className="w-4 h-4" />}>
             Add Time Slot

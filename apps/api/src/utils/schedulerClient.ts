@@ -30,8 +30,14 @@ class SchedulerClient {
       const response = await this.client.get('/health', { timeout: 3000 });
       return response.status === 200 && response.data?.status === 'ok';
     } catch (error) {
-      logger.warn(`Scheduler health check failed: ${(error as Error).message}`);
-      return false;
+      try {
+        const fallbackUrl = env.SCHEDULER_URL.replace('localhost', '127.0.0.1');
+        const fallbackRes = await axios.get(`${fallbackUrl}/health`, { timeout: 3000 });
+        return fallbackRes.status === 200 && fallbackRes.data?.status === 'ok';
+      } catch {
+        logger.warn(`Scheduler health check failed: ${(error as Error).message}`);
+        return false;
+      }
     }
   }
 

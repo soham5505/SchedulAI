@@ -8,9 +8,11 @@ import { ClassroomModel } from '../../models/classroom.model.js';
 import { TimeSlotModel } from '../../models/timeslot.model.js';
 import { TeachingAssignmentModel } from '../../models/assignment.model.js';
 import { BatchModel } from '../../models/batch.model.js';
+import { RoomReservationModel } from '../../models/roomReservation.model.js';
+import { timeSlotService } from '../timeslots/timeslot.service.js';
 import { schedulerClient } from '../../utils/schedulerClient.js';
 import { ApiError } from '../../middleware/error.middleware.js';
-import { ERROR_CODES, DEFAULT_HARD_CONSTRAINTS, DEFAULT_SOFT_CONSTRAINTS } from '@schedulai/config';
+import { ERROR_CODES, DEFAULT_HARD_CONSTRAINTS, DEFAULT_SOFT_CONSTRAINTS, DAYS_OF_WEEK, STANDARD_PERIOD_TIMES } from '@schedulai/config';
 import {
   IHardConstraints,
   ISoftConstraints,
@@ -36,6 +38,25 @@ export interface GenerateDTO {
 }
 
 export class GenerationService {
+  private async ensureReferenceTimeSlots(timeslots: Array<Record<string, any>>): Promise<Array<Record<string, any>>> {
+    const teachingTimes = STANDARD_PERIOD_TIMES.filter((slot) => !slot.isBreak);
+    const expected = new Set(
+      DAYS_OF_WEEK.flatMap((day) => teachingTimes.map((slot) => `${day}|${slot.period}|${slot.startTime}|${slot.endTime}`))
+    );
+    const actual = timeslots.map((slot) => `${slot.day}|${slot.periodNumber}|${slot.startTime}|${slot.endTime}`);
+    const isMatching = actual.length === expected.size && !actual.some((slot) => !expected.has(slot)) && new Set(actual).size === actual.length;
+
+    if (!isMatching) {
+      logger.info('Active teaching time slots do not match the fixed Monday-Saturday reference schedule. Auto-repairing with standard reference schedule...');
+      await timeSlotService.bulkGenerateStandard(DAYS_OF_WEEK);
+      const freshSlots = await TimeSlotModel.find({ isActive: true, isBreak: false }).lean();
+      logger.info(`Reference schedule auto-applied: ${freshSlots.length} active teaching slots ready.`);
+      return freshSlots as Array<Record<string, any>>;
+    }
+
+    return timeslots;
+  }
+
   private validateAssignmentReferences(
     assignments: Array<Record<string, any>>,
     semesterIds: Set<string>,
@@ -146,7 +167,7 @@ export class GenerationService {
           ...(a.classroomId ? { classroomId: a.classroomId.toString() } : {}),
           classroomRequirements: a.classroomRequirements || [],
           periodsPerWeek: a.periodsPerWeek,
-          isLab: a.isLab || false,
+          isLab: Boolean(a.isLab || subject.isLab),
           key: `${String(teacher._id)}|${String(subject._id)}|${a.semesterId?.toString?.() ?? String(a.semesterId)}|${a.batchId?.toString?.() ?? 'ALL'}`,
         };
 
@@ -176,7 +197,7 @@ export class GenerationService {
     );
 
     // 1. Fetch relevant academic data from MongoDB
-    const [semesters, classrooms, timeslots, assignments, batches] = await Promise.all([
+    const [semesters, classrooms, timeslots, assignments, batches, roomReservations] = await Promise.all([
       SemesterModel.find({ _id: { $in: semesterObjectIds }, isActive: true }).lean(),
       ClassroomModel.find({ isAvailable: true }).lean(),
       TimeSlotModel.find({ isActive: true, isBreak: false }).lean(),
@@ -186,6 +207,7 @@ export class GenerationService {
         .populate('classroomId')
         .lean(),
       BatchModel.find({ semesterId: { $in: semesterObjectIds }, isActive: true }).lean(),
+      RoomReservationModel.find({ isActive: true }).lean(),
     ]);
 
     const semesterIdSet = new Set(semesters.map((semester) => String(semester._id)));
@@ -200,9 +222,7 @@ export class GenerationService {
     if (semesters.length === 0) {
       throw new ApiError('No active semesters found for the selected IDs', 400, ERROR_CODES.BAD_REQUEST);
     }
-    if (timeslots.length === 0) {
-      throw new ApiError('No active non-break time slots found. Please configure time slots first.', 400, ERROR_CODES.TIMESLOT_NOT_FOUND);
-    }
+    const activeTimeslots = await this.ensureReferenceTimeSlots(timeslots as Array<Record<string, any>>);
     if (assignments.length === 0) {
       throw new ApiError('No teaching assignments found for the selected semester(s). Please create teaching assignments first.', 400, ERROR_CODES.ASSIGNMENT_NOT_FOUND);
     }
@@ -252,7 +272,7 @@ export class GenerationService {
       departmentId: data.departmentId || null,
       academicYear: data.academicYear || (semesters[0] ? semesters[0].academicYear : ''),
       startedAt: new Date(),
-      constraints: { ...DEFAULT_HARD_CONSTRAINTS, ...(data.hardConstraints || {}) },
+      constraints: DEFAULT_HARD_CONSTRAINTS,
       preferences: { ...DEFAULT_SOFT_CONSTRAINTS, ...(data.softConstraints || {}) },
       createdBy: user._id,
       version: nextVersion,
@@ -296,11 +316,14 @@ export class GenerationService {
         validSubjectIds,
         validSemesterIds: semesterIdSet,
         validBatchIds: batchIdSet,
+        batchSemesterMap: new Map(batches.map((batch) => [batch._id.toString(), batch.semesterId.toString()])),
+        batchCodeMap: new Map(batches.map((batch) => [batch._id.toString(), batch.code])),
         availableClassroomIds,
+        classroomIsLabMap: new Map(classrooms.map((classroom) => [classroom._id.toString(), Boolean(classroom.isLab)])),
         semesterBatchStudentSum,
         maxLectureRoomCapacity,
         classroomCapacityMap,
-        enforceClassroomCapacity: (data.hardConstraints?.enforceClassroomCapacity ?? DEFAULT_HARD_CONSTRAINTS.enforceClassroomCapacity) as boolean,
+        enforceClassroomCapacity: true,
       };
 
       const preFlightResult = preFlightValidator.validate(preFlightCtx);
@@ -359,13 +382,7 @@ export class GenerationService {
         availability: (t.availability as DayOfWeek[]) || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
         preferredTimeSlots: ((t.preferredTimeSlots as Array<unknown>) || []).map((id) => String(id)),
         unavailableTimeSlots: ((t.unavailableTimeSlots as Array<unknown>) || []).map((id) => String(id)),
-        maxClassesPerDay: Math.max(
-          Number(t.maxClassesPerDay) || 4,
-          Math.ceil(
-            (teacherPeriods.get(String(t._id)) || 0) /
-              Math.max(new Set((t.availability as Array<unknown>) || []).size, 1)
-          )
-        ),
+        maxClassesPerDay: Number(t.maxClassesPerDay) || 4,
         maxClassesPerWeek: Number(t.maxClassesPerWeek) || 20,
         isMaxWeeklySourceDefined: false, // By default, treat as not source-defined (from import/allocations)
       })),
@@ -375,7 +392,7 @@ export class GenerationService {
         code: String(s.code || ''),
         weeklyPeriods: Number(s.weeklyPeriods) || 4,
         lecturePeriods: s.lecturePeriods !== undefined ? Number(s.lecturePeriods) : 3,
-        labPeriods: s.labPeriods !== undefined ? Number(s.labPeriods) : 1,
+        labPeriods: s.labPeriods !== undefined ? Number(s.labPeriods) : 2,
         isLab: Boolean(s.isLab),
       })),
       classrooms: classrooms.map((c) => ({
@@ -398,14 +415,14 @@ export class GenerationService {
         code: b.code,
         studentCount: b.studentCount,
       })),
-      timeslots: timeslots.map((ts) => ({
+      timeslots: activeTimeslots.map((ts) => ({
         id: ts._id.toString(),
         day: ts.day as DayOfWeek,
         startTime: ts.startTime,
         endTime: ts.endTime,
         periodNumber: ts.periodNumber,
-        isBreak: ts.isBreak,
-        isActive: ts.isActive,
+        isBreak: Boolean(ts.isBreak),
+        isActive: true,
       })),
       teachingAssignments: (() => {
         const deduplicated = this.sanitizeAssignmentsForScheduler(assignments as Array<Record<string, any>>);
@@ -416,7 +433,20 @@ export class GenerationService {
 
         return deduplicated;
       })(),
-      hardConstraints: { ...DEFAULT_HARD_CONSTRAINTS, ...(data.hardConstraints || {}) },
+      // Convert room reservations into roomBlocks for the OR-Tools solver.
+      // Each reservation [startPeriod, endPeriod] becomes a block with
+      // startPeriod and duration so the solver can enforce per-period
+      // unavailability as a hard constraint.
+      roomBlocks: roomReservations.map((r) => ({
+        id: r._id.toString(),
+        classroomId: r.classroomId.toString(),
+        departmentId: r.departmentId.toString(),
+        dayOfWeek: r.dayOfWeek as DayOfWeek,
+        startPeriod: r.startPeriod,
+        duration: r.endPeriod - r.startPeriod + 1,
+        reason: r.reason || '',
+      })),
+      hardConstraints: DEFAULT_HARD_CONSTRAINTS,
       softConstraints: { ...DEFAULT_SOFT_CONSTRAINTS, ...(data.softConstraints || {}) },
       timeLimitSeconds: data.timeLimitSeconds || 60,
     };
@@ -428,6 +458,7 @@ export class GenerationService {
       if (solverResult.success && solverResult.timetable.length > 0) {
         // Save Timetable Entries into MongoDB
         const entriesToInsert = solverResult.timetable.map((entry) => ({
+          ...(entry.assignmentId ? { assignmentId: new mongoose.Types.ObjectId(entry.assignmentId) } : {}),
           semesterId: new mongoose.Types.ObjectId(entry.semesterId),
           ...(entry.batchId ? { batchId: new mongoose.Types.ObjectId(entry.batchId) } : {}),
           subjectId: new mongoose.Types.ObjectId(entry.subjectId),

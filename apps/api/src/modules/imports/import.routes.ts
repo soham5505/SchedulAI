@@ -15,6 +15,7 @@ const router = Router();
 
 router.use(authenticate);
 
+router.get('/template/master', importController.downloadMasterTemplate);
 router.post('/upload', requireRoles('ADMIN', 'STAFF'), upload.single('file'), importController.uploadAndParse);
 router.post('/execute', requireRoles('ADMIN', 'STAFF'), importController.execute);
 router.get('/jobs', validateQuery(PaginationQuerySchema), importController.getJobs);

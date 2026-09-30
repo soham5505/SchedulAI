@@ -17,13 +17,16 @@ import {
   RefreshCw,
   Download,
   Check,
+  Layers,
+  Sparkles,
+  BookOpen,
 } from 'lucide-react';
 
 export const ImportPage: React.FC = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  const [importType, setImportType] = useState<ImportType>('TEACHERS');
+  const [importType, setImportType] = useState<ImportType>('MASTER');
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
 
@@ -35,6 +38,21 @@ export const ImportPage: React.FC = () => {
     sampleRows: Record<string, unknown>[];
     suggestedMapping: Record<string, string>;
     allRows: Record<string, unknown>[];
+    sheets?: Record<string, {
+      headers: string[];
+      totalRows: number;
+      sampleRows: Record<string, unknown>[];
+      allRows: Record<string, unknown>[];
+    }>;
+    masterSheetsDetected?: {
+      teachers?: string;
+      subjects?: string;
+      classrooms?: string;
+      semesters?: string;
+      assignments?: string;
+      timeslots?: string;
+    };
+    isMasterWorkbook?: boolean;
   } | null>(null);
 
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
@@ -57,6 +75,24 @@ export const ImportPage: React.FC = () => {
     enabled: activeTab === 'HISTORY',
   });
 
+  const handleDownloadMasterTemplate = async () => {
+    try {
+      const res = await apiClient.get('/import/template/master', {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Master_Academic_Data_Template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Master Excel template downloaded successfully');
+    } catch {
+      toast.error('Failed to download master template');
+    }
+  };
+
   // Upload Mutation
   const uploadMutation = useMutation({
     mutationFn: async (uploadFile: File) => {
@@ -73,6 +109,21 @@ export const ImportPage: React.FC = () => {
           sampleRows: Record<string, unknown>[];
           suggestedMapping: Record<string, string>;
           allRows: Record<string, unknown>[];
+          sheets?: Record<string, {
+            headers: string[];
+            totalRows: number;
+            sampleRows: Record<string, unknown>[];
+            allRows: Record<string, unknown>[];
+          }>;
+          masterSheetsDetected?: {
+            teachers?: string;
+            subjects?: string;
+            classrooms?: string;
+            semesters?: string;
+            assignments?: string;
+            timeslots?: string;
+          };
+          isMasterWorkbook?: boolean;
         };
       }>('/import/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -83,7 +134,12 @@ export const ImportPage: React.FC = () => {
     onSuccess: (data) => {
       setParseResult(data);
       setColumnMapping(data.suggestedMapping || {});
-      toast.success(`Parsed ${data.totalRows} rows from ${data.fileName}`);
+      if (data.isMasterWorkbook || (data.sheetNames && data.sheetNames.length > 1 && data.masterSheetsDetected?.teachers)) {
+        setImportType('MASTER');
+      }
+      toast.success(
+        `Parsed ${data.sheetNames && data.sheetNames.length > 1 ? `${data.sheetNames.length} sheets` : `${data.totalRows} rows`} from ${data.fileName}`
+      );
     },
     onError: (err) => {
       toast.error((err as Error).message, 'Upload Failed');
@@ -94,6 +150,23 @@ export const ImportPage: React.FC = () => {
   const executeMutation = useMutation({
     mutationFn: async () => {
       if (!parseResult) return;
+      if (importType === 'MASTER') {
+        const sheetsData: Record<string, Record<string, unknown>[]> = {};
+        if (parseResult.sheets) {
+          for (const [sName, sData] of Object.entries(parseResult.sheets)) {
+            sheetsData[sName] = sData.allRows;
+          }
+        }
+        const res = await apiClient.post<{ success: boolean; data: IImportJob }>('/import/execute', {
+          type: 'MASTER',
+          sheetsData,
+          data: parseResult.allRows,
+          fileName: parseResult.fileName,
+          departmentId: selectedDeptId || undefined,
+        });
+        return res.data.data;
+      }
+
       const res = await apiClient.post<{ success: boolean; data: IImportJob }>('/import/execute', {
         type: importType,
         columnMapping,
@@ -106,7 +179,6 @@ export const ImportPage: React.FC = () => {
     onSuccess: (job) => {
       if (job) {
         if (job.successRows === 0 && job.errorRows > 0) {
-          // All rows failed — show actionable error
           const firstErr = (job as any).rowErrors?.[0];
           const hint = firstErr ? ` First error: ${firstErr.message}` : '';
           toast.error(
@@ -186,6 +258,7 @@ export const ImportPage: React.FC = () => {
       { key: 'startTime', label: 'Start' },
       { key: 'endTime', label: 'End' },
     ],
+    MASTER: [],
   };
 
   const historyColumns: Column<IImportJob>[] = [
@@ -269,6 +342,7 @@ export const ImportPage: React.FC = () => {
                 value={importType}
                 onChange={(e) => setImportType(e.target.value as ImportType)}
                 options={[
+                  { value: 'MASTER', label: '⭐ Master Workbook (All-in-One .xlsx)' },
                   { value: 'TEACHERS', label: 'Faculty & Teachers' },
                   { value: 'SUBJECTS', label: 'Courses & Subjects' },
                   { value: 'CLASSROOMS', label: 'Classrooms & Labs' },
@@ -287,6 +361,29 @@ export const ImportPage: React.FC = () => {
               />
             </div>
 
+            {/* Master Template Download Callout Banner */}
+            <div className="rounded-xl border border-teal-500/30 bg-teal-950/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-teal-300 font-semibold text-sm">
+                  <Sparkles className="w-4 h-4 text-teal-400" />
+                  <span>One-Click Master Excel Template</span>
+                </div>
+                <p className="text-xs text-slate-400 max-w-xl">
+                  Download our official multi-sheet Excel template (<code className="text-teal-300">Master_Academic_Data_Template.xlsx</code>). Contains all 6 sheets pre-formatted with sample data and exact column headers for 100% automated import without manual column mapping.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="teal"
+                size="sm"
+                onClick={handleDownloadMasterTemplate}
+                leftIcon={<Download className="w-4 h-4" />}
+                className="shrink-0"
+              >
+                Download Master Template (.xlsx)
+              </Button>
+            </div>
+
             {/* Dropzone */}
             <div className="mt-4 border-2 border-dashed border-slate-700 hover:border-teal-500/60 rounded-2xl p-8 text-center bg-slate-950/40 transition flex flex-col items-center justify-center gap-3">
               <FileSpreadsheet className="w-12 h-12 text-teal-400" />
@@ -300,7 +397,7 @@ export const ImportPage: React.FC = () => {
                     className="hidden"
                   />
                 </label>
-                <p className="text-xs text-slate-500 mt-1">Up to 15MB file size supported with automatic header detection</p>
+                <p className="text-xs text-slate-500 mt-1">Up to 15MB file size supported with automatic multi-sheet detection</p>
               </div>
 
               {file && (
@@ -312,90 +409,280 @@ export const ImportPage: React.FC = () => {
             </div>
           </Card>
 
-          {/* Step 2: Column Mapping & Live Preview */}
+          {/* Step 2: Confirmation / Column Mapping & Live Preview */}
           {parseResult && (
             <Card className="space-y-6 border-teal-500/30 animate-in fade-in">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-                    Step 2: Map Columns & Confirm ({parseResult.totalRows} rows ready)
+                    {importType === 'MASTER' ? (
+                      <span className="flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-teal-400" />
+                        Step 2: Master Workbook Overview ({parseResult.sheetNames.length} Sheets Detected)
+                      </span>
+                    ) : (
+                      `Step 2: Map Columns & Confirm (${parseResult.totalRows} rows ready)`
+                    )}
                   </h3>
-                  <p className="text-xs text-slate-400">Match your spreadsheet headers to the system database fields</p>
+                  <p className="text-xs text-slate-400">
+                    {importType === 'MASTER'
+                      ? 'All sheets will be imported in topological order to satisfy relational dependencies automatically'
+                      : 'Match your spreadsheet headers to the system database fields'}
+                  </p>
                 </div>
                 <Badge variant="teal">{parseResult.fileName}</Badge>
               </div>
 
-              {/* Column Mapping Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {requiredFieldsByType[importType].map((field) => (
-                  <div key={field.key} className="space-y-1.5 p-3 rounded-xl border border-slate-800 bg-slate-950/60">
-                    <label className="block text-xs font-semibold text-slate-300">
-                      {field.label}
-                    </label>
-                    <select
-                      value={columnMapping[field.key] || ''}
-                      onChange={(e) => setColumnMapping({ ...columnMapping, [field.key]: e.target.value })}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-teal-500 focus:outline-none"
-                    >
-                      <option value="">-- Select Matching Column --</option>
-                      {parseResult.headers.map((h) => (
-                        <option key={h} value={h}>
-                          {h}
-                        </option>
-                      ))}
-                    </select>
+              {importType === 'MASTER' ? (
+                /* Master Workbook Flow */
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {[
+                      { key: 'teachers', name: 'Teachers', icon: '👨‍🏫', desc: 'Faculty profiles & IDs' },
+                      { key: 'subjects', name: 'Subjects', icon: '📚', desc: 'Courses, credits, & lab flags' },
+                      { key: 'classrooms', name: 'Classrooms', icon: '🏛️', desc: 'Rooms, labs & capacities' },
+                      { key: 'semesters', name: 'Semesters', icon: '🎓', desc: 'Batches, sections & student count' },
+                      { key: 'assignments', name: 'Assignments', icon: '🔗', desc: 'Teacher ↔ Subject ↔ Room' },
+                      { key: 'timeslots', name: 'TimeSlots', icon: '⏰', desc: 'Periods, breaks, & hours' },
+                    ].map((entity) => {
+                      const detectedSheetName = parseResult.masterSheetsDetected?.[entity.key as keyof typeof parseResult.masterSheetsDetected];
+                      const sheetInfo = detectedSheetName && parseResult.sheets ? parseResult.sheets[detectedSheetName] : null;
+
+                      return (
+                        <div
+                          key={entity.key}
+                          className={`p-3.5 rounded-xl border transition-all ${
+                            detectedSheetName
+                              ? 'border-emerald-500/40 bg-emerald-950/20'
+                              : 'border-slate-800 bg-slate-900/40 opacity-70'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-base">{entity.icon}</span>
+                            {detectedSheetName ? (
+                              <Badge variant="emerald" size="sm">
+                                {sheetInfo?.totalRows ?? 0} Rows
+                              </Badge>
+                            ) : (
+                              <Badge variant="amber" size="sm">
+                                Optional / Missing
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="mt-2 font-semibold text-xs text-slate-200">{entity.name}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{entity.desc}</div>
+                          {detectedSheetName && (
+                            <div className="mt-2 text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/20 truncate">
+                              Sheet: &quot;{detectedSheetName}&quot;
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
 
-              {/* Sample Data Preview Table */}
-              <div className="space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Sample Data Preview (First 5 Rows)
+                  <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-300 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-slate-100">Zero-Config Relational Resolution: </span>
+                      The system automatically links Teacher Employee IDs, Subject Codes, Semester Names, and Room Numbers together across sheets in sequential order. No manual column matching required!
+                    </div>
+                  </div>
+
+                  {/* Import Action */}
+                  <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+                    <Button variant="secondary" onClick={() => setParseResult(null)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="teal"
+                      size="lg"
+                      isLoading={executeMutation.isPending}
+                      onClick={() => executeMutation.mutate()}
+                      leftIcon={<Check className="w-4 h-4" />}
+                    >
+                      Execute Master Import (All Sheets)
+                    </Button>
+                  </div>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/80 overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-900 text-slate-400 border-b border-slate-800">
-                      <tr>
-                        {parseResult.headers.map((h) => (
-                          <th key={h} className="p-2.5 font-semibold">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800 text-slate-300">
-                      {parseResult.sampleRows.map((row, rIdx) => (
-                        <tr key={rIdx}>
+              ) : (
+                /* Single Sheet Column Mapping Flow */
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {requiredFieldsByType[importType].map((field) => (
+                      <div key={field.key} className="space-y-1.5 p-3 rounded-xl border border-slate-800 bg-slate-950/60">
+                        <label className="block text-xs font-semibold text-slate-300">
+                          {field.label}
+                        </label>
+                        <select
+                          value={columnMapping[field.key] || ''}
+                          onChange={(e) => setColumnMapping({ ...columnMapping, [field.key]: e.target.value })}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-teal-500 focus:outline-none"
+                        >
+                          <option value="">-- Select Matching Column --</option>
                           {parseResult.headers.map((h) => (
-                            <td key={h} className="p-2.5 whitespace-nowrap">
-                              {String(row[h] ?? '')}
-                            </td>
+                            <option key={h} value={h}>
+                              {h}
+                            </option>
                           ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
 
-              {/* Import Action */}
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
-                <Button variant="secondary" onClick={() => setParseResult(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="teal"
-                  size="lg"
-                  isLoading={executeMutation.isPending}
-                  onClick={() => executeMutation.mutate()}
-                  leftIcon={<Check className="w-4 h-4" />}
-                >
-                  Execute Import ({parseResult.totalRows} rows)
-                </Button>
-              </div>
+                  {/* Sample Data Preview Table */}
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      Sample Data Preview (First 5 Rows)
+                    </div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/80 overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-slate-900 text-slate-400 border-b border-slate-800">
+                          <tr>
+                            {parseResult.headers.map((h) => (
+                              <th key={h} className="p-2.5 font-semibold">
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800 text-slate-300">
+                          {parseResult.sampleRows.map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              {parseResult.headers.map((h) => (
+                                <td key={h} className="p-2.5 whitespace-nowrap">
+                                  {String(row[h] ?? '')}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Import Action */}
+                  <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+                    <Button variant="secondary" onClick={() => setParseResult(null)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="teal"
+                      size="lg"
+                      isLoading={executeMutation.isPending}
+                      onClick={() => executeMutation.mutate()}
+                      leftIcon={<Check className="w-4 h-4" />}
+                    >
+                      Execute Import ({parseResult.totalRows} rows)
+                    </Button>
+                  </div>
+                </>
+              )}
             </Card>
           )}
+
+          {/* Reference Column Guide */}
+          <Card className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+              <BookOpen className="w-4 h-4 text-teal-400" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">
+                Required Columns Reference (Auto-Matched)
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400">
+              When naming columns in your Excel sheets, use these exact header names (case-insensitive) so the system maps them 100% automatically without any manual adjustments:
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">1. Sheet: Teachers</span>
+                  <Badge variant="teal" size="sm">5 cols</Badge>
+                </div>
+                <ul className="text-xs space-y-1 text-slate-400">
+                  <li><code className="text-teal-300">name</code>: Full Name</li>
+                  <li><code className="text-teal-300">email</code>: Email Address</li>
+                  <li><code className="text-teal-300">employeeId</code>: ID / Code (e.g. T-101)</li>
+                  <li><code className="text-teal-300">designation</code>: Professor / AP</li>
+                  <li><code className="text-slate-500">departmentCode</code> (optional)</li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">2. Sheet: Subjects</span>
+                  <Badge variant="teal" size="sm">6 cols</Badge>
+                </div>
+                <ul className="text-xs space-y-1 text-slate-400">
+                  <li><code className="text-teal-300">code</code>: Subject Code (e.g. CS501)</li>
+                  <li><code className="text-teal-300">name</code>: Subject Name</li>
+                  <li><code className="text-teal-300">isLab</code>: true or false</li>
+                  <li><code className="text-teal-300">weeklyPeriods</code>: 3 or 4 (lab: 2)</li>
+                  <li><code className="text-teal-300">credits</code>: Credits (e.g. 3 or 4)</li>
+                  <li><code className="text-slate-500">departmentCode</code> (optional)</li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">3. Sheet: Classrooms</span>
+                  <Badge variant="teal" size="sm">5 cols</Badge>
+                </div>
+                <ul className="text-xs space-y-1 text-slate-400">
+                  <li><code className="text-teal-300">roomNumber</code>: Room No (e.g. 301, LAB-01)</li>
+                  <li><code className="text-teal-300">name</code>: Room Name</li>
+                  <li><code className="text-teal-300">type</code>: LECTURE, LAB, or SEMINAR</li>
+                  <li><code className="text-teal-300">capacity</code>: Seat capacity (e.g. 60)</li>
+                  <li><code className="text-slate-500">building</code> (optional)</li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">4. Sheet: Semesters</span>
+                  <Badge variant="teal" size="sm">6 cols</Badge>
+                </div>
+                <ul className="text-xs space-y-1 text-slate-400">
+                  <li><code className="text-teal-300">name</code>: Semester Name (e.g. SEM 5)</li>
+                  <li><code className="text-teal-300">number</code>: Number (e.g. 5)</li>
+                  <li><code className="text-teal-300">section</code>: Section (e.g. A)</li>
+                  <li><code className="text-teal-300">studentCount</code>: Count (e.g. 60)</li>
+                  <li><code className="text-slate-500">academicYear</code> (optional)</li>
+                  <li><code className="text-slate-500">departmentCode</code> (optional)</li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">5. Sheet: Assignments</span>
+                  <Badge variant="teal" size="sm">6 cols</Badge>
+                </div>
+                <ul className="text-xs space-y-1 text-slate-400">
+                  <li><code className="text-teal-300">employeeId</code>: Teacher ID</li>
+                  <li><code className="text-teal-300">code</code>: Subject Code</li>
+                  <li><code className="text-teal-300">name</code>: Semester Name</li>
+                  <li><code className="text-teal-300">weeklyPeriods</code>: Number of periods</li>
+                  <li><code className="text-slate-500">location</code>: Preferred room (optional)</li>
+                  <li><code className="text-slate-500">batchCode</code>: B1, B2 (for lab batches)</li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">6. Sheet: TimeSlots</span>
+                  <Badge variant="teal" size="sm">6 cols</Badge>
+                </div>
+                <ul className="text-xs space-y-1 text-slate-400">
+                  <li><code className="text-teal-300">day</code>: MONDAY, TUESDAY, etc.</li>
+                  <li><code className="text-teal-300">periodNumber</code>: 1, 2, 3, etc.</li>
+                  <li><code className="text-teal-300">startTime</code>: e.g. 09:00</li>
+                  <li><code className="text-teal-300">endTime</code>: e.g. 10:00</li>
+                  <li><code className="text-slate-500">isBreak</code>: true or false</li>
+                  <li><code className="text-slate-500">label</code>: e.g. Lunch (optional)</li>
+                </ul>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>

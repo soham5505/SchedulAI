@@ -49,14 +49,15 @@ export const DEFAULT_SOFT_CONSTRAINTS: ISoftConstraints = {
 };
 
 export const STANDARD_PERIOD_TIMES: Array<{ period: number; startTime: string; endTime: string; isBreak?: boolean; label?: string }> = [
-  { period: 1, startTime: '09:00', endTime: '10:00', label: 'Period 1' },
-  { period: 2, startTime: '10:00', endTime: '11:00', label: 'Period 2' },
-  { period: 3, startTime: '11:00', endTime: '11:15', isBreak: true, label: 'Short Break' },
-  { period: 4, startTime: '11:15', endTime: '12:15', label: 'Period 3' },
-  { period: 5, startTime: '12:15', endTime: '13:15', label: 'Period 4' },
-  { period: 6, startTime: '13:15', endTime: '14:00', isBreak: true, label: 'Lunch Break' },
-  { period: 7, startTime: '14:00', endTime: '15:00', label: 'Period 5' },
-  { period: 8, startTime: '15:00', endTime: '16:00', label: 'Period 6' },
+  { period: 1, startTime: '09:15', endTime: '10:15', label: 'Period 1' },
+  { period: 2, startTime: '10:15', endTime: '11:15', label: 'Period 2' },
+  { period: 3, startTime: '11:15', endTime: '11:30', isBreak: true, label: 'SHORT BREAK' },
+  { period: 4, startTime: '11:30', endTime: '12:30', label: 'Period 3' },
+  { period: 5, startTime: '12:30', endTime: '13:30', label: 'Period 4' },
+  { period: 6, startTime: '13:30', endTime: '14:15', isBreak: true, label: 'LUNCH BREAK' },
+  { period: 7, startTime: '14:15', endTime: '15:15', label: 'Period 5' },
+  { period: 8, startTime: '15:15', endTime: '16:15', label: 'Period 6' },
+  { period: 9, startTime: '16:15', endTime: '17:15', label: 'Period 7' },
 ];
 
 export const ERROR_CODES = {
@@ -88,6 +89,8 @@ export const ERROR_CODES = {
   ASSIGNMENT_NOT_FOUND: 'ASSIGNMENT_NOT_FOUND',
   GENERATION_NOT_FOUND: 'GENERATION_NOT_FOUND',
   TIMETABLE_NOT_FOUND: 'TIMETABLE_NOT_FOUND',
+  RESERVATION_NOT_FOUND: 'RESERVATION_NOT_FOUND',
+  RESERVATION_OVERLAP: 'RESERVATION_OVERLAP',
 
   // Conflicts & Scheduling
   TEACHER_CONFLICT: 'TEACHER_CONFLICT',
