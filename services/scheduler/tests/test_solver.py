@@ -186,6 +186,19 @@ def test_generate_timetable_infeasible(sample_payload):
     assert len(data["violations"]) > 0
 
 
+def test_lecture_uses_actual_enrollment_not_an_80_seat_floor(sample_payload):
+    sample_payload["semesters"][0]["studentCount"] = 40
+    sample_payload["classrooms"] = [
+        {"id": "c1", "name": "Hall 101", "capacity": 60, "type": "LECTURE",
+         "equipment": [], "isLab": False, "isAvailable": True}
+    ]
+
+    response = client.post("/generate", json=sample_payload)
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+
+
 def _batch_payload(sample_payload):
     payload = deepcopy(sample_payload)
     payload["timeslots"] = [
@@ -224,6 +237,17 @@ def test_different_batches_can_share_a_slot_with_distinct_resources(sample_paylo
     assert data["success"] is True
     assert {entry["batchId"] for entry in data["timetable"]} == {"b1", "b2", "b3"}
     assert {entry["classroomId"] for entry in data["timetable"]} == {"c1", "c2", "c3"}
+
+
+def test_lab_capacity_uses_assigned_batch_strength(sample_payload):
+    payload = _batch_payload(sample_payload)
+    payload["batches"][0]["studentCount"] = 16
+    payload["classrooms"][0]["capacity"] = 16
+
+    response = client.post("/generate", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
 
 
 def test_same_batch_conflict_is_infeasible(sample_payload):
@@ -1672,6 +1696,7 @@ def test_same_lab_room_for_b1_and_b2_same_slot_infeasible():
          "isLab": True, "classroomRequirements": []},
     ]
     p["hardConstraints"] = {key: False for key in p["hardConstraints"]}
+    p["hardConstraints"]["enforceClassroomConflicts"] = True
     res = client.post("/generate", json=p).json()
     assert res["success"] is False, (
         "Two batches forced into the same lab room at the same slot must be infeasible"

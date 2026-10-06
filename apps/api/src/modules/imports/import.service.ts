@@ -11,7 +11,7 @@ import { BatchModel } from '../../models/batch.model.js';
 import { DepartmentModel } from '../../models/department.model.js';
 import { ApiError } from '../../middleware/error.middleware.js';
 import { ERROR_CODES, DAYS_OF_WEEK, STANDARD_PERIOD_TIMES } from '@schedulai/config';
-import { ImportType, IUser, IImportError, QueryParams } from '@schedulai/shared-types';
+import { ImportType, IUser, IImportError, IImportSheetResult, QueryParams } from '@schedulai/shared-types';
 import { Logger } from '../../utils/logger.js';
 
 const logger = new Logger('ImportService');
@@ -22,10 +22,10 @@ export class ImportService {
     const lowerHeaders = headers.map((h) => ({ original: h, lower: h.toLowerCase().trim().replace(/[^a-z0-9]/g, '') }));
 
     const patterns: Record<string, string[]> = {
-      name: ['name', 'fullname', 'teachername', 'facultyname', 'subjectname', 'roomname', 'semestername'],
+      name: ['name', 'fullname', 'teachername', 'facultyname', 'subjectname', 'roomname', 'semestername', 'semester'],
       email: ['email', 'emailaddress', 'mail'],
       employeeId: ['employeeid', 'empid', 'facultyid', 'teacheremployeeid', 'id'],
-      code: ['code', 'subjectcode', 'deptcode', 'coursecode'],
+      code: ['code', 'subjectcode', 'coursecode'],
       credits: ['credits', 'credit', 'creditpoints'],
       weeklyPeriods: ['weeklyperiods', 'periods', 'periodsperweek', 'hours'],
       capacity: ['capacity', 'seats', 'studentcapacity', 'size'],
@@ -47,6 +47,7 @@ export class ImportService {
       academicYear: ['academicyear', 'year', 'ay', 'session'],
       isBreak: ['isbreak', 'break'],
       label: ['label', 'slotname'],
+        semesterId: ['semesterid', 'semid'],
     };
 
     for (const [targetKey, synonyms] of Object.entries(patterns)) {
@@ -102,7 +103,8 @@ export class ImportService {
         teachers: sheetNames.find((s) => /teacher|faculty/i.test(s)),
         subjects: sheetNames.find((s) => /subject|course/i.test(s)),
         classrooms: sheetNames.find((s) => /classroom|room|lab/i.test(s)),
-        semesters: sheetNames.find((s) => /semester|batch/i.test(s)),
+        semesters: sheetNames.find((s) => /semester/i.test(s)),
+        batches: sheetNames.find((s) => /batch/i.test(s)),
         assignments: sheetNames.find((s) => /assignment|workload|allotment/i.test(s)),
         timeslots: sheetNames.find((s) => /timeslot|timing|slot/i.test(s)),
       };
@@ -176,21 +178,21 @@ export class ImportService {
     // 5. Assignments Sheet (Full compliant set: lectures whole-class, labs with all 4 batches B1, B2, B3, B4)
     const assignmentsData = [
       // Theory Courses (3 weekly periods each in Lecture Hall CR-01)
-      { employeeId: 'EMP001', code: 'ITC501', name: 'SEM 5', batchCode: '', location: 'CR-01', weeklyPeriods: 3 },
-      { employeeId: 'EMP002', code: 'ITC502', name: 'SEM 5', batchCode: '', location: 'CR-01', weeklyPeriods: 3 },
-      { employeeId: 'EMP004', code: 'ITC503', name: 'SEM 5', batchCode: '', location: 'CR-01', weeklyPeriods: 3 },
+      { employeeId: 'EMP001', code: 'ITC501', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: '', location: 'CR-01', weeklyPeriods: 3 },
+      { employeeId: 'EMP002', code: 'ITC502', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: '', location: 'CR-01', weeklyPeriods: 3 },
+      { employeeId: 'EMP004', code: 'ITC503', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: '', location: 'CR-01', weeklyPeriods: 3 },
 
       // Computer Networks Lab (ITL501) - 4 batches B1, B2, B3, B4 in LAB-11
-      { employeeId: 'EMP001', code: 'ITL501', name: 'SEM 5', batchCode: 'B1', location: 'LAB-11', weeklyPeriods: 2 },
-      { employeeId: 'EMP001', code: 'ITL501', name: 'SEM 5', batchCode: 'B2', location: 'LAB-11', weeklyPeriods: 2 },
-      { employeeId: 'EMP002', code: 'ITL501', name: 'SEM 5', batchCode: 'B3', location: 'LAB-11', weeklyPeriods: 2 },
-      { employeeId: 'EMP002', code: 'ITL501', name: 'SEM 5', batchCode: 'B4', location: 'LAB-11', weeklyPeriods: 2 },
+      { employeeId: 'EMP001', code: 'ITL501', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: 'B1', location: 'LAB-11', weeklyPeriods: 2 },
+      { employeeId: 'EMP001', code: 'ITL501', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: 'B2', location: 'LAB-11', weeklyPeriods: 2 },
+      { employeeId: 'EMP002', code: 'ITL501', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: 'B3', location: 'LAB-11', weeklyPeriods: 2 },
+      { employeeId: 'EMP002', code: 'ITL501', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: 'B4', location: 'LAB-11', weeklyPeriods: 2 },
 
       // Database Systems Lab (ITL502) - 4 batches B1, B2, B3, B4 in LAB-02
-      { employeeId: 'EMP003', code: 'ITL502', name: 'SEM 5', batchCode: 'B1', location: 'LAB-02', weeklyPeriods: 2 },
-      { employeeId: 'EMP003', code: 'ITL502', name: 'SEM 5', batchCode: 'B2', location: 'LAB-02', weeklyPeriods: 2 },
-      { employeeId: 'EMP003', code: 'ITL502', name: 'SEM 5', batchCode: 'B3', location: 'LAB-02', weeklyPeriods: 2 },
-      { employeeId: 'EMP003', code: 'ITL502', name: 'SEM 5', batchCode: 'B4', location: 'LAB-02', weeklyPeriods: 2 },
+      { employeeId: 'EMP003', code: 'ITL502', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: 'B1', location: 'LAB-02', weeklyPeriods: 2 },
+      { employeeId: 'EMP003', code: 'ITL502', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: 'B2', location: 'LAB-02', weeklyPeriods: 2 },
+      { employeeId: 'EMP003', code: 'ITL502', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: 'B3', location: 'LAB-02', weeklyPeriods: 2 },
+      { employeeId: 'EMP003', code: 'ITL502', name: 'SEM 5', departmentCode: 'IT', academicYear: '2025-2026', number: 5, section: 'A', batchCode: 'B4', location: 'LAB-02', weeklyPeriods: 2 },
     ];
     const wsAssignments = XLSX.utils.json_to_sheet(assignmentsData);
     XLSX.utils.book_append_sheet(wb, wsAssignments, 'Assignments');
@@ -212,11 +214,141 @@ export class ImportService {
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   }
 
+  private getMasterEntityType(sheetName: string): ImportType | null {
+    if (/teacher|faculty/i.test(sheetName)) return 'TEACHERS';
+    if (/subject|course/i.test(sheetName)) return 'SUBJECTS';
+    if (/semester/i.test(sheetName)) return 'SEMESTERS';
+    if (/assignment|workload|allotment/i.test(sheetName)) return 'ASSIGNMENTS';
+    if (/batch/i.test(sheetName)) return 'BATCHES';
+    if (/classroom|room|lab/i.test(sheetName)) return 'CLASSROOMS';
+    if (/timeslot|timing|slot/i.test(sheetName)) return 'TIMESLOTS';
+    return null;
+  }
+
+  private getMasterStageOrder(type: ImportType | null): number {
+    const stageOrder: Partial<Record<ImportType, number>> = {
+      TEACHERS: 0,
+      SUBJECTS: 1,
+      CLASSROOMS: 2,
+      SEMESTERS: 3,
+      BATCHES: 4,
+      ASSIGNMENTS: 5,
+      TIMESLOTS: 6,
+    };
+    return type ? stageOrder[type] ?? 99 : 99;
+  }
+
+  private getImportErrorField(type: ImportType, message: string): string {
+    const normalized = message.toLowerCase();
+    const fieldRules: Array<[RegExp, string]> = [
+      [/student.?count|students?/, 'studentCount'],
+      [/employee.?id/, 'employeeId'],
+      [/e-?mail/, 'email'],
+      [/teacher name|subject name/, 'name'],
+      [/subject code|course code/, 'code'],
+      [/semester (?:name|id|number)|semester.*ambiguous/, 'semester'],
+      [/department/, 'departmentCode'],
+      [/batch/, 'batchCode'],
+      [/room number/, 'roomNumber'],
+      [/classroom|location|room/, type === 'ASSIGNMENTS' ? 'location' : 'classroom'],
+      [/weekly periods|periods per week|period number/, 'weeklyPeriods'],
+      [/capacity/, 'capacity'],
+      [/start time/, 'startTime'],
+      [/end time/, 'endTime'],
+      [/day /, 'day'],
+    ];
+    return fieldRules.find(([pattern]) => pattern.test(normalized))?.[1] || 'row';
+  }
+
+  private async resolveSemesterReference(
+    row: Record<string, unknown>,
+    columnMapping: Record<string, string>,
+    selectedDepartmentId: mongoose.Types.ObjectId | undefined,
+    rowNumber: number
+  ) {
+    const rawSemesterId = String(row[columnMapping.semesterId || 'semesterId'] || '').trim();
+    const semesterName = String(row[columnMapping.name || 'name'] || '').trim();
+    const departmentCode = String(row[columnMapping.departmentCode || 'departmentCode'] || '').trim().toUpperCase();
+    const academicYear = String(row[columnMapping.academicYear || 'academicYear'] || '').trim();
+    let rawNumber = String(row[columnMapping.number || 'number'] || '').trim();
+    const section = String(row[columnMapping.section || 'section'] || '').trim();
+
+    let departmentId = selectedDepartmentId;
+    if (departmentCode) {
+      const department = await DepartmentModel.findOne({ code: departmentCode });
+      if (!department) {
+        throw new Error(`Row ${rowNumber}: Department '${departmentCode}' not found`);
+      }
+      if (departmentId && String(departmentId) !== String(department._id)) {
+        throw new Error(`Row ${rowNumber}: Department Code '${departmentCode}' conflicts with the selected department`);
+      }
+      departmentId = department._id;
+    }
+
+    if (!rawSemesterId && !semesterName) {
+      throw new Error(`Row ${rowNumber}: Semester name or Semester ID is required`);
+    }
+
+    let numericIdUsedAsSemesterNumber = false;
+    if (rawSemesterId && !mongoose.Types.ObjectId.isValid(rawSemesterId)) {
+      const numericSemesterNumber = Number(rawSemesterId);
+      if (/^[1-9]\d*$/.test(rawSemesterId) && Number.isInteger(numericSemesterNumber) && numericSemesterNumber <= 12) {
+        if (rawNumber && Number(rawNumber) !== numericSemesterNumber) {
+          throw new Error(`Row ${rowNumber}: Semester ID '${rawSemesterId}' conflicts with Semester Number '${rawNumber}'`);
+        }
+        if (!departmentId || !academicYear || !section) {
+          throw new Error(
+            `Row ${rowNumber}: Semester ID '${rawSemesterId}' is a semester number, not a MongoDB ID; provide Department Code, Academic Year, and Section, or map this value to Semester Number`
+          );
+        }
+        rawNumber = rawSemesterId;
+        numericIdUsedAsSemesterNumber = true;
+      } else {
+        throw new Error(`Row ${rowNumber}: Semester ID '${rawSemesterId}' is invalid; use a MongoDB ID or Semester Number`);
+      }
+    }
+
+    const semesterQuery: Record<string, unknown> = {};
+    if (rawSemesterId) {
+      if (!numericIdUsedAsSemesterNumber) {
+        semesterQuery._id = new mongoose.Types.ObjectId(rawSemesterId);
+      }
+    }
+    if (semesterName) {
+          const escapedName = semesterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      semesterQuery.name = { $regex: new RegExp(`^${escapedName}$`, 'i') };
+    }
+    if (departmentId) semesterQuery.departmentId = departmentId;
+    if (academicYear) semesterQuery.academicYear = academicYear;
+    if (rawNumber) {
+      const number = Number(rawNumber);
+      if (!Number.isInteger(number) || number < 1) {
+        throw new Error(`Row ${rowNumber}: Semester number '${rawNumber}' is invalid`);
+      }
+      semesterQuery.number = number;
+    }
+    if (section) semesterQuery.section = section;
+    semesterQuery.isActive = true;
+
+    const matches = await SemesterModel.find(semesterQuery).lean();
+    if (matches.length === 0) {
+      const identity = rawSemesterId || semesterName;
+      throw new Error(`Row ${rowNumber}: No semester matches '${identity}' and the supplied department/year/section`);
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        `Row ${rowNumber}: Semester '${semesterName}' is ambiguous; provide Semester ID or departmentCode, academicYear, number, and section`
+      );
+    }
+    return matches[0];
+  }
+
   private async processEntityRows(
     type: ImportType,
     columnMapping: Record<string, string>,
     rows: Record<string, unknown>[],
     defaultDeptId: mongoose.Types.ObjectId | undefined,
+    selectedDepartmentId: mongoose.Types.ObjectId | undefined,
     deptMapByCode: Map<string, mongoose.Types.ObjectId>,
     processedAssignments: Map<string, { rowNumber: number }>,
     sheetName?: string
@@ -418,20 +550,43 @@ export class ImportService {
           }
 
           successCount++;
+        } else if (type === 'BATCHES') {
+          const semester = await this.resolveSemesterReference(
+            row,
+            columnMapping,
+            selectedDepartmentId,
+            rowNumber
+          );
+          const batchCode = normalizeBatchCode(
+            String(row[columnMapping.batchCode || columnMapping.code || 'batchCode'] || '')
+          );
+          const studentCount = Number(row[columnMapping.studentCount || 'studentCount']);
+          if (!batchCode) throw new Error(`Row ${rowNumber}: Batch code is required`);
+          if (!Number.isInteger(studentCount) || studentCount < 1) {
+            throw new Error(`Row ${rowNumber}: Batch studentCount must be a positive integer`);
+          }
+
+          await BatchModel.findOneAndUpdate(
+            { semesterId: semester._id, code: batchCode },
+            {
+              semesterId: semester._id,
+              code: batchCode,
+              studentCount,
+              isActive: true,
+            },
+            { upsert: true, new: true }
+          );
+          successCount++;
         } else if (type === 'ASSIGNMENTS') {
           const teacherEmpId = String(row[columnMapping.employeeId || 'employeeId'] || '').trim();
           const teacherEmail = String(row[columnMapping.email || 'email'] || '').trim().toLowerCase();
           const rawSubjectCode = String(row[columnMapping.code || 'code'] || '').trim().toUpperCase();
-          const semesterName = String(row[columnMapping.name || 'name'] || '').trim();
           const rawPeriodsPerWeek = row[columnMapping.weeklyPeriods || 'weeklyPeriods'];
 
           if (!teacherEmpId && !teacherEmail)
             throw new Error(`Row ${rowNumber}: Teacher Employee ID is missing — check the column mapping for 'Teacher Employee ID'`);
           if (!rawSubjectCode)
             throw new Error(`Row ${rowNumber}: Subject Code is missing — check the column mapping for 'Subject Code'`);
-          if (!semesterName)
-            throw new Error(`Row ${rowNumber}: Semester Name is missing — check the column mapping for 'Semester Name'`);
-
           const teacher = await TeacherModel.findOne(
             teacherEmpId
               ? { employeeId: teacherEmpId }
@@ -440,12 +595,13 @@ export class ImportService {
           if (!teacher)
             throw new Error(`Row ${rowNumber}: Teacher with Employee ID '${teacherEmpId || teacherEmail}' not found in the database`);
 
-          const escapedName = semesterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const semester = await SemesterModel.findOne({
-            name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
-          });
-          if (!semester)
-            throw new Error(`Row ${rowNumber}: Semester '${semesterName}' not found — ensure it exists in the Semesters & Batches table`);
+          const semester = await this.resolveSemesterReference(
+            row,
+            columnMapping,
+            selectedDepartmentId,
+            rowNumber
+          );
+          const semesterName = semester.name;
 
           const batchRecords = await BatchModel.find({ semesterId: semester._id, isActive: true }).lean();
           const explicitBatchColumn = Boolean(columnMapping.batchCode);
@@ -476,9 +632,16 @@ export class ImportService {
 
           let batchId: mongoose.Types.ObjectId | undefined;
           if (batchCode) {
-            const batch = await BatchModel.findOne({ semesterId: semester._id, code: batchCode }).lean();
+            const batch = await BatchModel.findOne({ semesterId: semester._id, code: batchCode, isActive: true }).lean();
             if (!batch) throw new Error(`Row ${rowNumber}: Batch '${batchCode}' not found in semester '${semesterName}'`);
             batchId = batch._id;
+          }
+
+          if (subject.isLab && !batchId) {
+            throw new Error(`Row ${rowNumber}: Lab assignment for '${subject.code}' requires a valid B1-B4 batchCode`);
+          }
+          if (!subject.isLab && batchId) {
+            throw new Error(`Row ${rowNumber}: Theory assignment '${subject.code}' must be semester-level; leave batchCode blank`);
           }
 
           const location = String(row[columnMapping.location || 'location'] || '').trim();
@@ -494,12 +657,23 @@ export class ImportService {
             classroomId = classroom._id;
           }
 
-          const assignmentKey = `${teacher._id}|${subject._id}|${semester._id}|${batchId?.toString() || 'ALL'}`;
+          const assignmentKey = `${subject._id}|${semester._id}|${batchId?.toString() || 'ALL'}`;
 
           if (processedAssignments.has(assignmentKey)) {
             const existing = processedAssignments.get(assignmentKey)!;
-            throw new Error(`Row ${rowNumber}: Duplicate assignment for this teacher, course, semester, and batch (first seen on row ${existing.rowNumber})`);
+            throw new Error(`Row ${rowNumber}: Duplicate assignment for this course, semester, and batch (first seen on row ${existing.rowNumber})`);
           } else {
+            const existingAssignment = await TeachingAssignmentModel.findOne({
+              subjectId: subject._id,
+              semesterId: semester._id,
+              batchId: batchId || null,
+            }).lean();
+            if (existingAssignment && String(existingAssignment.teacherId) !== String(teacher._id)) {
+              throw new Error(
+                `Row ${rowNumber}: This course, semester, and batch already has an assignment with a different teacher; update the existing assignment before importing`
+              );
+            }
+
             await TeachingAssignmentModel.findOneAndUpdate(
               { teacherId: teacher._id, subjectId: subject._id, semesterId: semester._id, batchId: batchId || null },
               {
@@ -548,9 +722,11 @@ export class ImportService {
         logger.warn(`Import row ${rowNumber} failed: ${prefix}${errMsg}`);
         errors.push({
           row: rowNumber,
-          field: sheetName || 'general',
+          field: this.getImportErrorField(type, errMsg),
           message: `${prefix}${errMsg}`,
           value: row,
+          sheetName,
+          entityType: type,
         });
       }
     }
@@ -575,6 +751,10 @@ export class ImportService {
       processedRows: 0,
       successRows: 0,
       errorRows: 0,
+      skippedRows: 0,
+      totalSheets: 1,
+      warnings: [],
+      worksheetResults: [],
       rowErrors: [],
       createdBy: user._id,
       startedAt: new Date(),
@@ -585,6 +765,7 @@ export class ImportService {
     const defaultDeptId = departmentId
       ? new mongoose.Types.ObjectId(departmentId)
       : departments[0]?._id;
+    const selectedDepartmentId = departmentId ? new mongoose.Types.ObjectId(departmentId) : undefined;
 
     const processedAssignments = new Map<string, { rowNumber: number }>();
 
@@ -593,6 +774,7 @@ export class ImportService {
       columnMapping,
       rows,
       defaultDeptId,
+      selectedDepartmentId,
       deptMapByCode,
       processedAssignments
     );
@@ -600,9 +782,21 @@ export class ImportService {
     job.processedRows = rows.length;
     job.successRows = successCount;
     job.errorRows = errors.length;
+    job.skippedRows = 0;
+    job.totalSheets = 1;
+    job.worksheetResults = [{
+      sheetName: fileName,
+      entityType: type,
+      foundRows: rows.length,
+      processedRows: rows.length,
+      importedRows: successCount,
+      skippedRows: 0,
+      failedRows: errors.length,
+      warnings: [],
+    }];
     job.rowErrors = errors;
     job.progress = 100;
-    job.status = errors.length === rows.length ? 'FAILED' : 'COMPLETED';
+    job.status = successCount === 0 ? 'FAILED' : errors.length > 0 ? 'PARTIAL' : 'COMPLETED';
     job.completedAt = new Date();
     await job.save();
 
@@ -632,6 +826,10 @@ export class ImportService {
       processedRows: 0,
       successRows: 0,
       errorRows: 0,
+      skippedRows: 0,
+      totalSheets: sheetNames.length,
+      warnings: [],
+      worksheetResults: [],
       rowErrors: [],
       createdBy: user._id,
       startedAt: new Date(),
@@ -642,50 +840,88 @@ export class ImportService {
     const defaultDeptId = departmentId
       ? new mongoose.Types.ObjectId(departmentId)
       : departments[0]?._id;
+    const selectedDepartmentId = departmentId ? new mongoose.Types.ObjectId(departmentId) : undefined;
 
     const allErrors: IImportError[] = [];
     let totalSuccess = 0;
     const processedAssignments = new Map<string, { rowNumber: number }>();
 
     // Sequential topological order: Teachers -> Subjects -> Classrooms -> Semesters -> Assignments -> TimeSlots
-    const stages: Array<{ type: ImportType; pattern: RegExp }> = [
-      { type: 'TEACHERS', pattern: /teacher|faculty/i },
-      { type: 'SUBJECTS', pattern: /subject|course/i },
-      { type: 'CLASSROOMS', pattern: /classroom|room|lab/i },
-      { type: 'SEMESTERS', pattern: /semester|batch/i },
-      { type: 'ASSIGNMENTS', pattern: /assignment|workload|allotment/i },
-      { type: 'TIMESLOTS', pattern: /timeslot|timing|slot/i },
-    ];
+    const worksheetResults: IImportSheetResult[] = [];
+    const sheetEntries = sheetNames
+      .map((sheetName) => ({ sheetName, type: this.getMasterEntityType(sheetName), rows: sheetsData[sheetName] || [] }))
+      .sort((left, right) => this.getMasterStageOrder(left.type) - this.getMasterStageOrder(right.type));
+    const warningMessages: string[] = [];
 
-    for (const stage of stages) {
-      const matchedSheetName = sheetNames.find((s) => stage.pattern.test(s));
-      if (!matchedSheetName) continue;
-      const rows = sheetsData[matchedSheetName] || [];
-      if (rows.length === 0) continue;
+    for (const sheet of sheetEntries) {
+      const sheetResult: IImportSheetResult = {
+        sheetName: sheet.sheetName,
+        entityType: sheet.type ?? undefined,
+        foundRows: sheet.rows.length,
+        processedRows: 0,
+        importedRows: 0,
+        skippedRows: 0,
+        failedRows: 0,
+        warnings: [],
+      };
 
-      const headers = Object.keys(rows[0] || {});
+      if (!sheet.type) {
+        if (sheet.rows.length > 0) {
+          const warning = `Worksheet '${sheet.sheetName}' was skipped because its name does not identify a supported entity`;
+          sheetResult.skippedRows = sheet.rows.length;
+          sheetResult.warnings.push(warning);
+          warningMessages.push(warning);
+        } else {
+          sheetResult.warnings.push(`Empty worksheet '${sheet.sheetName}' was skipped`);
+          warningMessages.push(`Empty worksheet '${sheet.sheetName}' was skipped`);
+        }
+        worksheetResults.push(sheetResult);
+        continue;
+      }
+
+      if (sheet.rows.length === 0) {
+        const warning = `Supported worksheet '${sheet.sheetName}' is empty and was skipped`;
+        sheetResult.warnings.push(warning);
+        warningMessages.push(warning);
+        worksheetResults.push(sheetResult);
+        continue;
+      }
+
+      const headers = Object.keys(sheet.rows[0] || {});
       const mapping = this.suggestMappingForHeaders(headers);
-
       const result = await this.processEntityRows(
-        stage.type,
+        sheet.type,
         mapping,
-        rows,
+        sheet.rows,
         defaultDeptId,
+        selectedDepartmentId,
         deptMapByCode,
         processedAssignments,
-        matchedSheetName
+        sheet.sheetName
       );
-
+      sheetResult.processedRows = sheet.rows.length;
+      sheetResult.importedRows = result.successCount;
+      sheetResult.failedRows = result.errors.length;
       totalSuccess += result.successCount;
       allErrors.push(...result.errors);
+      worksheetResults.push(sheetResult);
     }
 
-    job.processedRows = totalAllRows;
+    job.totalRows = totalAllRows;
+    job.processedRows = worksheetResults.reduce((sum, sheet) => sum + sheet.processedRows, 0);
     job.successRows = totalSuccess;
     job.errorRows = allErrors.length;
+    job.skippedRows = worksheetResults.reduce((sum, sheet) => sum + sheet.skippedRows, 0);
+    job.totalSheets = sheetNames.length;
+    job.warnings = warningMessages;
+    job.worksheetResults = worksheetResults;
     job.rowErrors = allErrors;
     job.progress = 100;
-    job.status = allErrors.length === totalAllRows ? 'FAILED' : 'COMPLETED';
+    job.status = totalSuccess === 0
+      ? 'FAILED'
+      : allErrors.length > 0 || job.skippedRows > 0 || warningMessages.length > 0
+        ? 'PARTIAL'
+        : 'COMPLETED';
     job.completedAt = new Date();
     await job.save();
 
@@ -701,6 +937,7 @@ export class ImportService {
 
     const [jobs, total] = await Promise.all([
       ImportJobModel.find({})
+        .select('-rowErrors')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -725,11 +962,23 @@ export class ImportService {
   }
 
   async getJobById(id: string) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ApiError('Import job not found', 404, ERROR_CODES.IMPORT_JOB_NOT_FOUND);
+    }
     const job = await ImportJobModel.findById(id).populate('createdBy', 'name email').lean();
     if (!job) {
       throw new ApiError('Import job not found', 404, ERROR_CODES.IMPORT_JOB_NOT_FOUND);
     }
-    return job;
+    return {
+      ...job,
+      rowErrors: (job.rowErrors || []).map(({ row, field, message, sheetName, entityType }) => ({
+        row,
+        field,
+        message,
+        sheetName,
+        entityType,
+      })),
+    };
   }
 }
 

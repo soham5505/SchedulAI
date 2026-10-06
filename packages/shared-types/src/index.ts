@@ -12,9 +12,9 @@ export type PeriodType = 'LECTURE' | 'LAB' | 'TUTORIAL' | 'SEMINAR';
 
 export type GenerationStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
-export type ImportJobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+export type ImportJobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
 
-export type ImportType = 'TEACHERS' | 'SUBJECTS' | 'CLASSROOMS' | 'SEMESTERS' | 'TIMESLOTS' | 'ASSIGNMENTS' | 'TIMETABLE' | 'MASTER';
+export type ImportType = 'TEACHERS' | 'SUBJECTS' | 'CLASSROOMS' | 'SEMESTERS' | 'BATCHES' | 'TIMESLOTS' | 'ASSIGNMENTS' | 'TIMETABLE' | 'MASTER';
 
 export type AuditAction =
   | 'LOGIN'
@@ -253,6 +253,19 @@ export interface IImportError {
   field: string;
   message: string;
   value?: unknown;
+  sheetName?: string;
+  entityType?: ImportType;
+}
+
+export interface IImportSheetResult {
+  sheetName: string;
+  entityType?: ImportType;
+  foundRows: number;
+  processedRows: number;
+  importedRows: number;
+  skippedRows: number;
+  failedRows: number;
+  warnings: string[];
 }
 
 export interface IImportJob {
@@ -264,7 +277,11 @@ export interface IImportJob {
   totalRows: number;
   processedRows: number;
   successRows: number;
+  skippedRows: number;
   errorRows: number;
+  totalSheets: number;
+  warnings: string[];
+  worksheetResults: IImportSheetResult[];
   rowErrors: IImportError[];
   createdBy: string | IUser;
   startedAt?: string | Date;

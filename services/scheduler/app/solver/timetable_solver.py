@@ -37,7 +37,7 @@ class TimetableSolver:
             self.room_blocks_by_classroom_day.setdefault(
                 (block.classroomId, block.dayOfWeek), []
             ).append(block)
-        self.hard_constraints = HardConstraintsInput()
+        self.hard_constraints = request.hardConstraints or HardConstraintsInput()
         self.soft_constraints = request.softConstraints
         self.time_limit = request.timeLimitSeconds or 60
 
@@ -179,7 +179,7 @@ class TimetableSolver:
             print(f"  Active Time Slots Available: {len(self.timeslots)}")
             
             if workload['total_periods'] > len(self.timeslots):
-                print(f"  ⚠️  WARNING: Total demand ({workload['total_periods']}) exceeds available slots ({len(self.timeslots)})")
+                print(f"  [WARNING] Total demand ({workload['total_periods']}) exceeds available slots ({len(self.timeslots)})")
         
         # Faculty workload analysis
         print("\n\nFACULTY WORKLOAD ANALYSIS:")
@@ -215,9 +215,9 @@ class TimetableSolver:
             
             if teacher and workload['allocated_periods'] > teacher.maxClassesPerWeek:
                 if is_source_defined:
-                    print(f"  ⚠️  WARNING: Allocated ({workload['allocated_periods']}) exceeds source-defined max ({teacher.maxClassesPerWeek})")
+                    print(f"  [WARNING] Allocated ({workload['allocated_periods']}) exceeds source-defined max ({teacher.maxClassesPerWeek})")
                 else:
-                    print(f"  ℹ️  INFO: Allocated ({workload['allocated_periods']}) exceeds UI default max ({teacher.maxClassesPerWeek}), but max is not source-defined so constraint will be disabled")
+                    print(f"  [INFO] Allocated ({workload['allocated_periods']}) exceeds UI default max ({teacher.maxClassesPerWeek}), but max is not source-defined so constraint will be disabled")
         
         print("\nActive Time Slots: " + str(len(self.timeslots)))
         print("="*80 + "\n")
@@ -291,8 +291,8 @@ class TimetableSolver:
                             continue
 
                         is_lab_instance = a.isLab or subject.isLab
-                        # Capacity check
-                        required_capacity = max(20, self._student_count(a)) if is_lab_instance else max(80, self._student_count(a))
+                        # Whole-class and batch-specific sessions use actual enrollment.
+                        required_capacity = self._student_count(a)
                         if c.capacity < required_capacity:
                             continue
 
@@ -507,7 +507,7 @@ class TimetableSolver:
                                 for c in self.classrooms.values():
                                     if (a.id, k, ts.id, c.id) in x:
                                         all_teacher_vars.append(x[(a.id, k, ts.id, c.id)])
-                if all_teacher_vars:
+                if all_teacher_vars and getattr(teacher, 'isMaxWeeklySourceDefined', False):
                     model.Add(sum(all_teacher_vars) <= teacher.maxClassesPerWeek)
 
         # 3. Soft Constraints / Objective

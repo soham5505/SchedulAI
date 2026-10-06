@@ -173,11 +173,12 @@ function teacherInstructions() {
 function subjectSheet() {
     const headers = ['Subject Name', 'Subject Code', 'Credits', 'Weekly Periods', 'Is Lab', 'Department Code'];
     const rows = [
-        ['Data Structures', 'DS', 4, 4, 'false', 'CSE'],
-        ['Database Management System', 'DBMS', 4, 4, 'false', 'CSE'],
-        ['Computer Networks', 'CN', 3, 4, 'false', 'CSE'],
-        ['Operating Systems', 'OS', 4, 4, 'false', 'CSE'],
-        ['Programming Lab', 'PL', 2, 3, 'true', 'CSE'],
+        ['Data Structures', 'DS', 4, 3, 'false', 'CSE'],
+        ['Database Management System', 'DBMS', 4, 3, 'false', 'CSE'],
+        ['Computer Networks', 'CN', 3, 3, 'false', 'CSE'],
+        ['Operating Systems', 'OS', 4, 3, 'false', 'CSE'],
+        ['Software Engineering', 'SE', 3, 3, 'false', 'CSE'],
+        ['Programming Lab', 'PL', 2, 2, 'true', 'CSE'],
     ];
     return makeSheet(headers, rows, [32, 16, 10, 16, 10, 18]);
 }
@@ -304,7 +305,7 @@ function semesterInstructions() {
         'Semester Name    | Required | Text | Min 2, Max 100 chars | This is the DISPLAY name',
         '                 | Auto-detected from: name, fullname, semestername',
         '                 | Example: 3rd Semester - A',
-        '                 | ⚠ Teaching Assignments match semesters by this exact name (case-insensitive)',
+        '                 | Assignment lookup accepts Semester ID, or a unique full semester identity',
         '',
         'Semester Number  | Optional | Number | Min 1, Max 12 | Default: 1',
         '                 | Auto-detected from: number',
@@ -329,9 +330,8 @@ function semesterInstructions() {
         '• Department Code not found → row fails',
         '• Academic Year format mismatch → records are created as duplicates',
         '',
-        '⚠ CRITICAL: The "Semester Name" here MUST EXACTLY MATCH what you write in the',
-        '  Teaching Assignments file. The Teaching Assignments importer searches by name',
-        '  using case-insensitive matching.',
+        'ASSIGNMENT IDENTITY: Use Semester ID, or Semester Name + Department Code +',
+        '  Academic Year + Semester Number + Section. Duplicate names require the full identity.',
     ]);
 }
 
@@ -423,20 +423,30 @@ function timeslotInstructions() {
 // Import service:
 //   - teacherEmpId → TeacherModel.findOne({ employeeId: teacherEmpId })
 //   - subjectCode  → SubjectModel.findOne({ code: subjectCode })
-//   - semesterName → SemesterModel.findOne({ name: /$regex case-insensitive/ })
-//   - batchCode → BatchModel.findOne({ semesterId, code }) when supplied; blank or -- means whole class
+//   - semester → SemesterModel.find({ departmentId, academicYear, number, section })
+//     or semesterId when supplied; ambiguous/missing rows fail clearly
+//   - batchCode → active BatchModel.findOne({ semesterId, code }); required for labs
+//     and blank for theory
 //   - periodsPerWeek → from columnMapping.weeklyPeriods
 //   - isLab → copied from subject.isLab automatically (NOT from Excel)
 function assignmentSheet() {
-    const headers = ['Teacher Employee ID', 'Subject Code', 'Semester Name', 'Batch Code', 'Weekly Periods', 'Location'];
-    const rows = [
-        ['T001', 'DS', '3rd Semester - A', '--', 4, ''],
-        ['T002', 'DBMS', '3rd Semester - A', '--', 4, ''],
-        ['T003', 'CN', '5th Semester - A', 'BATCH_A', 4, 'Lab A'],
-        ['T001', 'OS', '5th Semester - A', '--', 4, ''],
-        ['T004', 'PL', '3rd Semester - B', '--', 3, ''],
+    const headers = [
+        'Teacher Employee ID', 'Teacher Email', 'Subject Code', 'Semester Name', 'Semester ID',
+        'Department Code', 'Academic Year', 'Semester Number', 'Section', 'Batch Code',
+        'Weekly Periods', 'Location',
     ];
-    return makeSheet(headers, rows, [22, 16, 22, 16]);
+    const rows = [
+        ['T001', '', 'DS', '3rd Semester - A', '', 'CSE', '2025-2026', 3, 'A', '', 3, ''],
+        ['T002', '', 'DBMS', '3rd Semester - A', '', 'CSE', '2025-2026', 3, 'A', '', 3, ''],
+        ['T003', '', 'CN', '3rd Semester - A', '', 'CSE', '2025-2026', 3, 'A', '', 3, ''],
+        ['T001', '', 'OS', '3rd Semester - A', '', 'CSE', '2025-2026', 3, 'A', '', 3, ''],
+        ['T005', '', 'SE', '3rd Semester - A', '', 'CSE', '2025-2026', 3, 'A', '', 3, ''],
+        ['T004', '', 'PL', '3rd Semester - A', '', 'CSE', '2025-2026', 3, 'A', 'B1', 2, ''],
+        ['T004', '', 'PL', '3rd Semester - A', '', 'CSE', '2025-2026', 3, 'A', 'B2', 2, ''],
+        ['T004', '', 'PL', '3rd Semester - A', '', 'CSE', '2025-2026', 3, 'A', 'B3', 2, ''],
+        ['T004', '', 'PL', '3rd Semester - A', '', 'CSE', '2025-2026', 3, 'A', 'B4', 2, ''],
+    ];
+    return makeSheet(headers, rows, [22, 28, 16, 22, 26, 18, 16, 16, 10, 14, 16, 18]);
 }
 
 function assignmentInstructions() {
@@ -447,7 +457,9 @@ function assignmentInstructions() {
         'PURPOSE: Assigns teachers to subjects for specific semester batches.',
         '         This is the core input for AI timetable generation.',
         'IMPORT ORDER: Import LAST — depends on Teachers, Subjects, AND Semesters.',
-        'DUPLICATE RULE: Upsert on (Teacher + Subject + Semester + Batch).',
+        'DUPLICATE RULE: One row per (Subject + Semester + Batch). Repeated course scopes fail,',
+        '               even if a repeated row names a different teacher. Re-importing the same',
+        '               teacher/course/semester/batch updates the existing assignment.',
         '',
         'COLUMN DETAILS:',
         '──────────────',
@@ -461,18 +473,24 @@ function assignmentInstructions() {
         '                    | Example: DS, DBMS, CN',
         '                    | ⚠ Case-insensitive — DS and ds both work',
         '',
-        'Semester Name       | Required | Must match Name of an EXISTING semester (case-insensitive)',
-        '                    | Auto-detected from: name, semestername',
-        '                    | Example: 3rd Semester - A',
-        '                    | ⚠ Must match EXACTLY (minus casing) what is in the Semesters table',
+        'Semester ID         | Optional alternative | MongoDB ObjectId of the target semester (not the semester number)',
+        '                    | Example: an ObjectId such as 66f...; put 3 in Semester Number, not here',
+        '                    | If used, it must identify one active semester and match any other supplied identity fields.',
         '',
-        'Batch Code          | Optional | Must match an EXISTING batch in that semester. Blank or -- means whole class (ALL)',
+        'Semester Name       | Required when Semester ID is blank | Example: 3rd Semester - A',
+        'Department Code     | Required for name lookup | Example: CSE',
+        'Academic Year       | Required for name lookup | Example: 2025-2026',
+        'Semester Number     | Required for name lookup | Example: 3',
+        'Section             | Required for name lookup | Example: A',
+        '                    | Together these fields resolve duplicate semester names safely.',
+        '',
+        'Batch Code          | Required for labs | Must match an ACTIVE batch in the resolved semester (B1-B4)',
+        '                    | Theory assignments must leave Batch Code blank.',
         '                    | Auto-detected from: batch, batchcode, group, cohort',
-        '                    | Examples: BATCH_A, GROUP_2, ALL, --',
+        '                    | Examples: B1, B2, B3, B4',
         '',
-        'Weekly Periods      | Optional | Number | Min 1, Max 20 | Default: 4',
+        'Weekly Periods      | Required by subject kind | Theory: 3; Lab: 2',
         '                    | Auto-detected from: weeklyperiods, periods, periodsperweek, hours',
-        '                    | = number of classes per week for this assignment',
         '',
         'Location            | Optional | If supplied, must match an existing classroom/location',
         '',
@@ -483,12 +501,14 @@ function assignmentInstructions() {
         'FOREIGN KEY DEPENDENCIES:',
         '• Teacher Employee ID → must exist in Faculty & Teachers',
         '• Subject Code → must exist in Courses & Subjects',
-        '• Semester Name → must exist in Semesters & Batches',
+        '• Semester ID OR complete semester identity → must resolve exactly one active semester',
+        '• Lab Batch Code → must be active and belong to the resolved semester',
         '',
         'COMMON ERRORS:',
         '• "Teacher with Employee ID T001 not found" → import Teachers first',
         '• "Subject with code DS not found" → import Subjects first',
-        '• "Semester 3rd Semester - A not found" → name must match Semesters exactly',
+        '• Ambiguous semester name → supply Department Code, Academic Year, Semester Number, and Section',
+        '• Missing/incorrect Batch Code on a lab row → choose B1-B4 from that semester',
         '• Teacher Employee ID dropdown shows blank → select the column manually',
     ]);
 }
@@ -543,7 +563,7 @@ function importOrderSheet() {
         [2, 'Semesters & Batches', 'semesters_template.xlsx', 'Departments', 'Semester records need a valid Department Code'],
         [2, 'Classrooms & Labs', 'classrooms_template.xlsx', '(none)', 'No foreign key dependency'],
         [2, 'Time Slots', 'timeslots_template.xlsx', '(none)', 'No foreign key dependency'],
-        [3, 'Teaching Assignments', 'teaching_assignments_template.xlsx', 'Teachers + Subjects + Semesters', 'Resolves Teacher by Employee ID, Subject by Code, Semester by Name'],
+        [3, 'Teaching Assignments', 'teaching_assignments_template.xlsx', 'Teachers + Subjects + Semesters + Batches', 'Resolves semester by ID or complete identity; labs use active batches scoped to that semester'],
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws['!cols'] = [{ wch: 8 }, { wch: 24 }, { wch: 36 }, { wch: 28 }, { wch: 60 }];
@@ -599,7 +619,9 @@ function consistencySheet() {
         // Assignments
         ['Assignments', 'Teacher Employee ID', 'employeeId', 'employeeid, teacheremployeeid, empid, facultyid, id', 'teacherId (resolved)', 'teacherId (ObjectId)', '✔ OK (fixed)'],
         ['Assignments', 'Subject Code', 'code', 'code, subjectcode, coursecode', 'subjectId (resolved)', 'subjectId (ObjectId)', '✔ OK'],
-        ['Assignments', 'Semester Name', 'name', 'name, fullname, semestername', 'semesterId (resolved)', 'semesterId (ObjectId)', '✔ OK (case-insensitive)'],
+        ['Assignments', 'Semester ID', 'semesterId', 'semesterid, semid', 'semesterId (resolved)', 'semesterId (ObjectId)', '✔ Stable identity'],
+        ['Assignments', 'Semester Identity', 'name + departmentCode + academicYear + number + section', 'semestername, departmentcode, academicyear, semesternumber, section', 'semesterId (resolved)', 'semesterId (ObjectId)', '✔ Ambiguity checked'],
+        ['Assignments', 'Batch Code', 'batchCode', 'batch, batchcode, batchname, group, cohort', 'batchId (resolved within semesterId)', 'batchId (ObjectId)', '✔ Active semester-scoped batch'],
         ['Assignments', 'Weekly Periods', 'weeklyPeriods', 'weeklyperiods, periods, periodsperweek, hours', 'periodsPerWeek', 'periodsPerWeek', '✔ OK'],
     ];
 

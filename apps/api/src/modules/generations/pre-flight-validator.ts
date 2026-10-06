@@ -55,10 +55,18 @@ export interface PreFlightContext {
   /** Available classroom IDs (isAvailable=true rooms) */
   availableClassroomIds: Set<string>;
   classroomIsLabMap: Map<string, boolean>;
+  classroomTypeMap: Map<string, string>;
+  classroomEquipmentMap: Map<string, string[]>;
   /** Map of semesterId -> total batch student count (sum of all batches) */
   semesterBatchStudentSum: Map<string, number>;
+  /** Map of semesterId -> declared student count */
+  semesterStudentCountMap: Map<string, number>;
+  /** Map of batchId -> student count */
+  batchStudentCountMap: Map<string, number>;
   /** Max capacity of any available non-lab classroom */
   maxLectureRoomCapacity: number;
+  /** Max capacity of any available lab classroom */
+  maxLabRoomCapacity: number;
   /** Map of classroomId -> capacity */
   classroomCapacityMap: Map<string, number>;
   /** Enforce classroom capacity constraint (from hardConstraints) */
@@ -79,7 +87,13 @@ export class PreFlightValidator {
       const subjectRef = raw.subjectId as Record<string, unknown> | null | undefined;
       const semesterId = this._str(raw.semesterId);
       const batchId    = raw.batchId ? this._str(raw.batchId) : null;
-      const classroomId = raw.classroomId ? this._str(raw.classroomId) : null;
+      const classroomRef = raw.classroomId as Record<string, unknown> | null | undefined;
+      const classroomId = raw.classroomId
+        ? this._str(classroomRef?._id ?? raw.classroomId)
+        : null;
+      const classroomRequirements = Array.isArray(raw.classroomRequirements)
+        ? raw.classroomRequirements.map((requirement) => String(requirement))
+        : [];
       const periodsPerWeek = Number(raw.periodsPerWeek ?? 0);
       const isLab = Boolean(raw.isLab || (subjectRef as Record<string, unknown> | null | undefined)?.isLab);
 
@@ -144,12 +158,37 @@ export class PreFlightValidator {
         } else {
           const capacity = ctx.classroomCapacityMap.get(classroomId) ?? 0;
           const isLabRoom = ctx.classroomIsLabMap.get(classroomId) ?? false;
-          if (isLab && (!isLabRoom || capacity < 20)) {
+          const batchStudentCount = batchId ? this._positiveCount(ctx.batchStudentCountMap.get(batchId)) : 0;
+          if (!this._roomMeetsRequirements(ctx, classroomId, classroomRequirements)) {
+            errors.push({
+              assignmentId,
+              field: 'classroomRequirements',
+              problem: `Assigned room does not satisfy classroom requirements: ${classroomRequirements.join(', ')}`,
+              action: 'Assign a room with the required equipment/type or clear classroomId for dynamic room selection',
+            });
+            errorAssignmentIds.add(assignmentId);
+          } else if (isLab && !isLabRoom) {
             errors.push({
               assignmentId,
               field: 'classroomId',
-              problem: `Lab assignment requires an available lab room with capacity >= 20; this room has capacity ${capacity}`,
-              action: 'Clear classroomId for dynamic room selection or assign a qualifying laboratory',
+              problem: 'Lab assignment is fixed to a room that is not an available laboratory',
+              action: 'Assign an available lab or clear classroomId for dynamic room selection',
+            });
+            errorAssignmentIds.add(assignmentId);
+          } else if (isLab && batchStudentCount === 0) {
+            errors.push({
+              assignmentId,
+              field: 'batchId',
+              problem: `Cannot validate capacity because batch ${batchId ?? 'unknown'} has no valid positive student count`,
+              action: 'Set a positive student count for this batch',
+            });
+            errorAssignmentIds.add(assignmentId);
+          } else if (isLab && capacity < batchStudentCount) {
+            errors.push({
+              assignmentId,
+              field: 'classroomId',
+              problem: `Lab batch ${batchId} needs ${batchStudentCount} seats, but assigned room capacity is ${capacity}`,
+              action: `Assign an available lab with capacity >= ${batchStudentCount} or clear classroomId for dynamic room selection`,
             });
             errorAssignmentIds.add(assignmentId);
           } else if (!isLab && isLabRoom) {
@@ -160,6 +199,17 @@ export class PreFlightValidator {
               action: 'Clear classroomId for dynamic room selection or assign a lecture room',
             });
             errorAssignmentIds.add(assignmentId);
+          } else if (!isLab && !batchId && ctx.enforceClassroomCapacity) {
+            const requiredSeats = this._semesterStudentCount(ctx, semesterId);
+            if (requiredSeats > 0 && capacity < requiredSeats) {
+              errors.push({
+                assignmentId,
+                field: 'roomCapacity',
+                problem: `Lecture for semester ${semesterId} needs ${requiredSeats} seats, but assigned room capacity is ${capacity}`,
+                action: `Assign a lecture room with capacity >= ${requiredSeats} or clear classroomId for dynamic room selection`,
+              });
+              errorAssignmentIds.add(assignmentId);
+            }
           }
         }
       }
@@ -225,14 +275,44 @@ export class PreFlightValidator {
 
       // ── 8. Lecture capacity check ─────────────────────────────────────────
       if (ctx.enforceClassroomCapacity && !isLab && !batchId) {
-        const semBatchSum = ctx.semesterBatchStudentSum.get(semesterId) ?? 0;
-        const studentCount = Math.max(80, semBatchSum);
-        if (studentCount > 0 && studentCount > ctx.maxLectureRoomCapacity) {
+        const studentCount = this._semesterStudentCount(ctx, semesterId);
+        const maxCompatibleCapacity = this._maxCompatibleRoomCapacity(ctx, false, classroomRequirements);
+        if (studentCount === 0) {
+          errors.push({
+            assignmentId,
+            field: 'studentCount',
+            problem: `Cannot validate lecture capacity because semester ${semesterId} has no valid enrollment or batch total`,
+            action: 'Set a positive semester studentCount or valid positive student counts on its active batches',
+          });
+          errorAssignmentIds.add(assignmentId);
+        } else if (!classroomId && studentCount > maxCompatibleCapacity) {
           errors.push({
             assignmentId,
             field: 'roomCapacity',
-            problem: `Lecture needs ${studentCount} seats (${semBatchSum > 0 ? 'sum of all batches' : 'semester.studentCount'}) but the largest available lecture room only holds ${ctx.maxLectureRoomCapacity} students`,
+            problem: `Lecture for semester ${semesterId} needs ${studentCount} seats, but the largest available compatible lecture room holds ${maxCompatibleCapacity}`,
             action: `Add a lecture room with capacity >= ${studentCount} to the database`,
+          });
+          errorAssignmentIds.add(assignmentId);
+        }
+      }
+
+      if (ctx.enforceClassroomCapacity && isLab && batchId && !classroomId) {
+        const batchStudentCount = this._positiveCount(ctx.batchStudentCountMap.get(batchId));
+        const maxCompatibleCapacity = this._maxCompatibleRoomCapacity(ctx, true, classroomRequirements);
+        if (batchStudentCount === 0) {
+          errors.push({
+            assignmentId,
+            field: 'batchId',
+            problem: `Cannot validate capacity because batch ${batchId} has no valid positive student count`,
+            action: 'Set a positive student count for this batch',
+          });
+          errorAssignmentIds.add(assignmentId);
+        } else if (batchStudentCount > maxCompatibleCapacity) {
+          errors.push({
+            assignmentId,
+            field: classroomRequirements.length > 0 && maxCompatibleCapacity === 0 ? 'classroomRequirements' : 'roomCapacity',
+            problem: `Lab batch ${batchId} in semester ${semesterId} needs ${batchStudentCount} seats, but the largest available compatible lab holds ${maxCompatibleCapacity}`,
+            action: `Add an available lab with capacity >= ${batchStudentCount} or correct the batch student count`,
           });
           errorAssignmentIds.add(assignmentId);
         }
@@ -242,19 +322,23 @@ export class PreFlightValidator {
     for (const [courseKey, courseAssignments] of assignmentsByCourse) {
       const first = courseAssignments[0];
       if (first.isLab) {
-        const batchCodes = courseAssignments
-          .map((assignment) => assignment.batchId ? ctx.batchCodeMap.get(assignment.batchId) : undefined)
-          .filter((code): code is string => Boolean(code));
+        const semesterId = courseKey.split('|')[0];
+        const expectedBatchIds = [...ctx.batchSemesterMap]
+          .filter(([, batchSemesterId]) => batchSemesterId === semesterId)
+          .map(([batchId]) => batchId);
+        const assignedBatchIds = courseAssignments
+          .map((assignment) => assignment.batchId)
+          .filter((batchId): batchId is string => Boolean(batchId));
         if (
-          courseAssignments.length !== 4 ||
-          new Set(batchCodes).size !== 4 ||
-          !['B1', 'B2', 'B3', 'B4'].every((code) => batchCodes.includes(code))
+          courseAssignments.length !== expectedBatchIds.length ||
+          new Set(assignedBatchIds).size !== expectedBatchIds.length ||
+          !expectedBatchIds.every((batchId) => assignedBatchIds.includes(batchId))
         ) {
           errors.push({
             assignmentId: first.id,
             field: 'batchAssignments',
-            problem: `Lab course ${courseKey} must have exactly one assignment for each of B1, B2, B3, and B4`,
-            action: 'Create or repair the four batch-specific lab assignments',
+            problem: `Lab course ${courseKey} must have exactly one assignment for each of the ${expectedBatchIds.length} active batches in its semester`,
+            action: 'Create or repair one batch-specific lab assignment for every active batch in the semester',
           });
           courseAssignments.forEach((assignment) => errorAssignmentIds.add(assignment.id));
         }
@@ -336,6 +420,34 @@ export class PreFlightValidator {
       return (val as { toString(): string }).toString();
     }
     return String(val);
+  }
+
+  private _positiveCount(value: unknown): number {
+    const count = Number(value);
+    return Number.isFinite(count) && count > 0 ? count : 0;
+  }
+
+  private _semesterStudentCount(ctx: PreFlightContext, semesterId: string): number {
+    const batchSum = this._positiveCount(ctx.semesterBatchStudentSum.get(semesterId));
+    return batchSum || this._positiveCount(ctx.semesterStudentCountMap.get(semesterId));
+  }
+
+  private _roomMeetsRequirements(ctx: PreFlightContext, classroomId: string, requirements: string[]): boolean {
+    if (requirements.length === 0) return true;
+    const equipment = ctx.classroomEquipmentMap.get(classroomId) ?? [];
+    const type = ctx.classroomTypeMap.get(classroomId);
+    return requirements.some((requirement) => equipment.includes(requirement) || requirement === type);
+  }
+
+  private _maxCompatibleRoomCapacity(ctx: PreFlightContext, isLab: boolean, requirements: string[]): number {
+    let maxCapacity = 0;
+    for (const [classroomId, rawCapacity] of ctx.classroomCapacityMap) {
+      if (!ctx.availableClassroomIds.has(classroomId)) continue;
+      if ((ctx.classroomIsLabMap.get(classroomId) ?? false) !== isLab) continue;
+      if (!this._roomMeetsRequirements(ctx, classroomId, requirements)) continue;
+      maxCapacity = Math.max(maxCapacity, this._positiveCount(rawCapacity));
+    }
+    return maxCapacity;
   }
 }
 

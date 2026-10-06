@@ -14,10 +14,9 @@ async function testRun() {
         await mongoose.connect(mongoUri);
         logger.info('Connected to MongoDB');
 
-        // Get active semesters that have assignments
+        // Get all active semesters
         const semesters = await SemesterModel.find({
             isActive: true,
-            name: /^SEM\s*(3|5|7)\s*-\s*B1$/i,
         }).lean();
         const semesterIds = semesters.map((s) => s._id.toString());
 

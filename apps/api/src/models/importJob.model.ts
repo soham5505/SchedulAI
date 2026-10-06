@@ -10,7 +10,20 @@ export interface IImportJobDocument extends Document {
   totalRows: number;
   processedRows: number;
   successRows: number;
+  skippedRows: number;
   errorRows: number;
+  totalSheets: number;
+  warnings: string[];
+  worksheetResults: Array<{
+    sheetName: string;
+    entityType?: ImportType;
+    foundRows: number;
+    processedRows: number;
+    importedRows: number;
+    skippedRows: number;
+    failedRows: number;
+    warnings: string[];
+  }>;
   rowErrors: IImportError[];
   createdBy: mongoose.Types.ObjectId;
   startedAt?: Date;
@@ -23,7 +36,7 @@ const ImportJobSchema = new Schema<IImportJobDocument>(
   {
     type: {
       type: String,
-      enum: ['TEACHERS', 'SUBJECTS', 'CLASSROOMS', 'SEMESTERS', 'TIMESLOTS', 'ASSIGNMENTS', 'TIMETABLE', 'MASTER'],
+      enum: ['TEACHERS', 'SUBJECTS', 'CLASSROOMS', 'SEMESTERS', 'BATCHES', 'TIMESLOTS', 'ASSIGNMENTS', 'TIMETABLE', 'MASTER'],
       required: true,
     },
     fileName: {
@@ -32,7 +45,7 @@ const ImportJobSchema = new Schema<IImportJobDocument>(
     },
     status: {
       type: String,
-      enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED'],
+      enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED'],
       default: 'PENDING',
       index: true,
     },
@@ -54,9 +67,36 @@ const ImportJobSchema = new Schema<IImportJobDocument>(
       type: Number,
       default: 0,
     },
+    skippedRows: {
+      type: Number,
+      default: 0,
+    },
     errorRows: {
       type: Number,
       default: 0,
+    },
+    totalSheets: {
+      type: Number,
+      default: 0,
+    },
+    warnings: {
+      type: [String],
+      default: [],
+    },
+    worksheetResults: {
+      type: [
+        {
+          sheetName: { type: String, required: true },
+          entityType: { type: String, default: null },
+          foundRows: { type: Number, default: 0 },
+          processedRows: { type: Number, default: 0 },
+          importedRows: { type: Number, default: 0 },
+          skippedRows: { type: Number, default: 0 },
+          failedRows: { type: Number, default: 0 },
+          warnings: { type: [String], default: [] },
+        },
+      ],
+      default: [],
     },
     rowErrors: {
       type: [

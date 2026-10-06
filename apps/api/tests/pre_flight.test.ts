@@ -60,8 +60,13 @@ function makeCtx(overrides: Partial<PreFlightContext> = {}): PreFlightContext {
     batchCodeMap: new Map([[batchId, 'B1']]),
     availableClassroomIds: new Set([classroomId]),
     classroomIsLabMap: new Map([[classroomId, false]]),
+    classroomTypeMap: new Map([[classroomId, 'LECTURE']]),
+    classroomEquipmentMap: new Map([[classroomId, []]]),
     semesterBatchStudentSum: new Map([[semesterId, 0]]),
+    semesterStudentCountMap: new Map([[semesterId, 60]]),
+    batchStudentCountMap: new Map([[batchId, 20]]),
     maxLectureRoomCapacity: 80,
+    maxLabRoomCapacity: 30,
     classroomCapacityMap: new Map([[classroomId, 80]]),
     enforceClassroomCapacity: true,
     ...overrides,
@@ -95,6 +100,17 @@ describe('PreFlightValidator', () => {
     expect(err).toBeDefined();
     expect(err?.problem).toContain(staleRoomId);
     expect(err?.action).toContain('migration 004');
+  });
+
+  it('accepts a populated classroom reference when its id is available', () => {
+    const ctx = makeCtx();
+    const roomId = [...ctx.availableClassroomIds][0];
+    ctx.assignments[0].classroomId = { _id: roomId, name: 'Lecture Hall' };
+
+    const result = validator.validate(ctx);
+
+    expect(result.errors.filter((error) => error.field === 'classroomId')).toHaveLength(0);
+    expect(result.ok).toBe(true);
   });
 
   // ── 2. Stale teacherId ─────────────────────────────────────────────────────
@@ -182,6 +198,63 @@ describe('PreFlightValidator', () => {
     expect(err?.problem).toContain(staleBatchId);
   });
 
+  it('accepts one lab assignment per active batch regardless of batch code', () => {
+    const ctx = makeCtx();
+    const semesterId = String(ctx.assignments[0].semesterId);
+    const subjectId = (ctx.assignments[0].subjectId as { _id: string })._id;
+    const teacherId = (ctx.assignments[0].teacherId as { _id: string })._id;
+    const batchIds = Array.from({ length: 4 }, () => NEW_ID());
+    const batchCodes = ['A', 'B', 'C', 'D'];
+
+    ctx.validBatchIds = new Set(batchIds);
+    ctx.batchSemesterMap = new Map(batchIds.map((batchId) => [batchId, semesterId]));
+    ctx.batchCodeMap = new Map(batchIds.map((batchId, index) => [batchId, batchCodes[index]]));
+    ctx.batchStudentCountMap = new Map(batchIds.map((batchId) => [batchId, 20]));
+    ctx.enforceClassroomCapacity = false;
+    ctx.assignments = batchIds.map((batchId) => ({
+      _id: NEW_ID(),
+      teacherId: { _id: teacherId, availability: ['MONDAY', 'TUESDAY'] },
+      subjectId: { _id: subjectId },
+      semesterId,
+      batchId,
+      classroomId: null,
+      periodsPerWeek: 2,
+      isLab: true,
+    }));
+
+    const result = validator.validate(ctx);
+
+    expect(result.errors.some((error) => error.field === 'batchAssignments')).toBe(false);
+    expect(result.ok).toBe(true);
+  });
+
+  it('requires lab assignments to cover every active batch in the semester', () => {
+    const ctx = makeCtx();
+    const semesterId = String(ctx.assignments[0].semesterId);
+    const subjectId = (ctx.assignments[0].subjectId as { _id: string })._id;
+    const teacherId = (ctx.assignments[0].teacherId as { _id: string })._id;
+    const batchIds = Array.from({ length: 4 }, () => NEW_ID());
+
+    ctx.validBatchIds = new Set(batchIds);
+    ctx.batchSemesterMap = new Map(batchIds.map((batchId) => [batchId, semesterId]));
+    ctx.batchStudentCountMap = new Map(batchIds.map((batchId) => [batchId, 20]));
+    ctx.enforceClassroomCapacity = false;
+    ctx.assignments = batchIds.slice(0, 3).map((batchId) => ({
+      _id: NEW_ID(),
+      teacherId: { _id: teacherId, availability: ['MONDAY', 'TUESDAY'] },
+      subjectId: { _id: subjectId },
+      semesterId,
+      batchId,
+      classroomId: null,
+      periodsPerWeek: 2,
+      isLab: true,
+    }));
+
+    const result = validator.validate(ctx);
+
+    expect(result.errors.some((error) => error.field === 'batchAssignments')).toBe(true);
+  });
+
   // ── 9. Lecture capacity too small ─────────────────────────────────────────
   it('flags a lecture when all available rooms are smaller than the total batch student count', () => {
     const semesterId = NEW_ID();
@@ -206,12 +279,108 @@ describe('PreFlightValidator', () => {
         enforceClassroomCapacity: true,
       }
     );
+    const roomId = [...ctx.availableClassroomIds][0];
+    ctx.classroomCapacityMap.set(roomId, 60);
     const result = validator.validate(ctx);
     expect(result.ok).toBe(false);
     const err = result.errors.find((e) => e.field === 'roomCapacity');
     expect(err).toBeDefined();
     expect(err?.problem).toContain('80');
     expect(err?.problem).toContain('60');
+  });
+
+  it('allows a 40-student lecture in a 60-seat room', () => {
+    const semesterId = NEW_ID();
+    const teacherId = NEW_ID();
+    const subjectId = NEW_ID();
+    const ctx = makeCtxWithAssignment(
+      { teacherId: { _id: teacherId }, subjectId: { _id: subjectId }, semesterId, batchId: null },
+      {
+        validTeacherIds: new Set([teacherId]),
+        validSubjectIds: new Set([subjectId]),
+        validSemesterIds: new Set([semesterId]),
+        semesterBatchStudentSum: new Map([[semesterId, 40]]),
+        semesterStudentCountMap: new Map([[semesterId, 90]]),
+        maxLectureRoomCapacity: 60,
+      }
+    );
+
+    const result = validator.validate(ctx);
+
+    expect(result.errors.some((error) => error.field === 'roomCapacity')).toBe(false);
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects a fixed 60-seat lecture room for an 80-student cohort', () => {
+    const ctx = makeCtx();
+    const roomId = [...ctx.availableClassroomIds][0];
+    const semesterId = String(ctx.assignments[0].semesterId);
+    ctx.assignments[0].classroomId = roomId;
+    ctx.semesterBatchStudentSum.set(semesterId, 80);
+    ctx.maxLectureRoomCapacity = 100;
+    ctx.classroomCapacityMap.set(roomId, 60);
+
+    const result = validator.validate(ctx);
+
+    expect(result.errors.find((error) => error.field === 'roomCapacity')?.problem).toContain('assigned room capacity is 60');
+  });
+
+  it('rejects a fixed lab smaller than its assigned batch', () => {
+    const ctx = makeCtx();
+    const roomId = [...ctx.availableClassroomIds][0];
+    const batchId = [...ctx.validBatchIds][0];
+    ctx.assignments[0].isLab = true;
+    ctx.assignments[0].batchId = batchId;
+    ctx.assignments[0].classroomId = roomId;
+    ctx.classroomIsLabMap.set(roomId, true);
+    ctx.classroomCapacityMap.set(roomId, 18);
+    ctx.batchStudentCountMap.set(batchId, 20);
+
+    const result = validator.validate(ctx);
+
+    expect(result.errors.find((error) => error.field === 'classroomId')?.problem).toContain('needs 20 seats');
+  });
+
+  it('rejects a lab assignment when batch strength is missing or invalid', () => {
+    const ctx = makeCtx();
+    const batchId = [...ctx.validBatchIds][0];
+    ctx.assignments[0].isLab = true;
+    ctx.assignments[0].batchId = batchId;
+    ctx.batchStudentCountMap.delete(batchId);
+
+    const result = validator.validate(ctx);
+
+    expect(result.errors.some((error) => error.field === 'batchId' && error.problem.includes('no valid positive student count'))).toBe(true);
+  });
+
+  it('rejects a fixed room that does not meet the assignment equipment requirements', () => {
+    const ctx = makeCtx();
+    const roomId = [...ctx.availableClassroomIds][0];
+    ctx.assignments[0].classroomId = roomId;
+    ctx.assignments[0].classroomRequirements = ['PROJECTOR'];
+
+    const result = validator.validate(ctx);
+
+    expect(result.errors.some((error) => error.field === 'classroomRequirements')).toBe(true);
+  });
+
+  it('uses only equipment-compatible rooms when checking dynamic lecture capacity', () => {
+    const ctx = makeCtx();
+    const roomId = [...ctx.availableClassroomIds][0];
+    const semesterId = String(ctx.assignments[0].semesterId);
+    const compatibleRoomId = NEW_ID();
+    ctx.assignments[0].classroomRequirements = ['PROJECTOR'];
+    ctx.semesterBatchStudentSum.set(semesterId, 80);
+    ctx.availableClassroomIds.add(compatibleRoomId);
+    ctx.classroomIsLabMap.set(compatibleRoomId, false);
+    ctx.classroomTypeMap.set(compatibleRoomId, 'LECTURE');
+    ctx.classroomEquipmentMap.set(compatibleRoomId, ['PROJECTOR']);
+    ctx.classroomCapacityMap.set(compatibleRoomId, 60);
+    ctx.classroomCapacityMap.set(roomId, 100);
+
+    const result = validator.validate(ctx);
+
+    expect(result.errors.find((error) => error.field === 'roomCapacity')?.problem).toContain('compatible lecture room holds 60');
   });
 
   // ── 10. Teacher has no availability days → WARNING only ───────────────────
@@ -335,6 +504,30 @@ describe('GenerationService — validateAssignmentReferences (stale reference de
         new Set(['other-room']) // classroomIds — staleRoomId missing
       )
     ).toThrow('references a missing classroom');
+  });
+
+  it('accepts a populated classroom when its id is available', () => {
+    const roomId = NEW_ID();
+    const assignments = [{
+      _id: 'asg-valid-room',
+      teacherId: { _id: 'teacher-ok', name: 'Dr. Valid' },
+      subjectId: { _id: 'sub-ok', name: 'Maths' },
+      semesterId: 'sem-1',
+      batchId: null,
+      classroomId: { _id: roomId, name: 'Lecture Hall' },
+      classroomRequirements: [],
+      periodsPerWeek: 2,
+      isLab: false,
+    }];
+
+    expect(() =>
+      (service as any).validateAssignmentReferences(
+        assignments,
+        new Set(['sem-1']),
+        new Set(),
+        new Set([roomId])
+      )
+    ).not.toThrow();
   });
 
   // ── 15. sanitizeAssignmentsForScheduler skips entries missing teacher ──────

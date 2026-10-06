@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client.js';
 import { useToast } from '../contexts/ToastContext.js';
-import { ImportType, IImportJob, IImportError, IDepartment } from '@schedulai/shared-types';
+import { ImportType, IImportJob, IDepartment, PaginationMeta } from '@schedulai/shared-types';
 import { Card } from '../components/ui/Card.js';
 import { Button } from '../components/ui/Button.js';
 import { Select } from '../components/ui/Select.js';
@@ -13,14 +13,93 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
-  ArrowRight,
-  RefreshCw,
+  ChevronDown,
   Download,
   Check,
   Layers,
   Sparkles,
   BookOpen,
 } from 'lucide-react';
+
+function ImportJobDetails({ job }: { job: IImportJob }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data, isLoading, isError, error } = useQuery<IImportJob>({
+    queryKey: ['import-job', job._id],
+    queryFn: async () => {
+      const response = await apiClient.get<{ success: boolean; data: IImportJob }>(`/import/jobs/${job._id}`);
+      return response.data.data;
+    },
+    enabled: expanded,
+    retry: false,
+  });
+
+  return (
+    <div className="max-w-[min(80vw,56rem)] whitespace-normal">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-300 hover:text-teal-200"
+      >
+        <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        {expanded ? 'Hide details' : 'View details'}
+      </button>
+      {expanded && (
+        <section className="mt-3 w-[min(80vw,56rem)] space-y-3 rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
+          {isLoading && <p role="status">Loading import details...</p>}
+          {isError && <p role="alert" className="text-rose-300">Could not load this import: {(error as Error).message}</p>}
+          {data && (
+            <>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                <div><dt className="text-slate-500">Job ID</dt><dd className="break-all font-mono">{data._id}</dd></div>
+                <div><dt className="text-slate-500">Status</dt><dd>{data.status}</dd></div>
+                <div><dt className="text-slate-500">Started</dt><dd>{data.startedAt ? new Date(data.startedAt).toLocaleString() : 'Not recorded'}</dd></div>
+                <div><dt className="text-slate-500">Completed</dt><dd>{data.completedAt ? new Date(data.completedAt).toLocaleString() : 'Not completed'}</dd></div>
+                <div><dt className="text-slate-500">Worksheets</dt><dd>{data.totalSheets ?? 1}</dd></div>
+                <div><dt className="text-slate-500">Rows found</dt><dd>{data.totalRows}</dd></div>
+                <div><dt className="text-slate-500">Processed</dt><dd>{data.processedRows}</dd></div>
+                <div><dt className="text-slate-500">Imported</dt><dd className="text-emerald-300">{data.successRows}</dd></div>
+                <div><dt className="text-slate-500">Failed / skipped</dt><dd className="text-rose-300">{data.errorRows} / {data.skippedRows ?? 0}</dd></div>
+              </dl>
+              {data.warnings?.length > 0 && (
+                <div className="space-y-1" role="status">
+                  <h4 className="font-semibold text-amber-300">Warnings</h4>
+                  {data.warnings.map((warning, index) => <p key={`${index}-${warning}`}>{warning}</p>)}
+                </div>
+              )}
+              {data.worksheetResults?.length > 0 && (
+                <div className="space-y-1">
+                  <h4 className="font-semibold text-slate-200">Worksheet results</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[38rem] text-left">
+                      <thead className="text-slate-500"><tr><th className="pr-3">Worksheet</th><th className="pr-3">Entity</th><th className="pr-3">Found</th><th className="pr-3">Imported</th><th className="pr-3">Skipped</th><th>Failed</th></tr></thead>
+                      <tbody>{data.worksheetResults.map((sheet) => (
+                        <tr key={sheet.sheetName} className="border-t border-slate-800">
+                          <td className="py-1 pr-3">{sheet.sheetName}</td><td className="pr-3">{sheet.entityType || 'Unrecognized'}</td><td className="pr-3">{sheet.foundRows}</td><td className="pr-3">{sheet.importedRows}</td><td className="pr-3">{sheet.skippedRows}</td><td>{sheet.failedRows}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1">
+                <h4 className="font-semibold text-slate-200">Row errors</h4>
+                {data.rowErrors?.length ? data.rowErrors.map((rowError, index) => (
+                  <details key={`${rowError.sheetName}-${rowError.row}-${index}`} className="border-t border-slate-800 py-1">
+                    <summary className="cursor-pointer text-rose-300">
+                      {rowError.sheetName ? `${rowError.sheetName} / ` : ''}Row {rowError.row} · {rowError.entityType || data.type} · {rowError.field}
+                    </summary>
+                    <p className="mt-1 pl-4 text-slate-300">{rowError.message}</p>
+                  </details>
+                )) : <p className="text-emerald-300">No row-level errors recorded.</p>}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
 
 export const ImportPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -49,6 +128,7 @@ export const ImportPage: React.FC = () => {
       subjects?: string;
       classrooms?: string;
       semesters?: string;
+      batches?: string;
       assignments?: string;
       timeslots?: string;
     };
@@ -57,6 +137,7 @@ export const ImportPage: React.FC = () => {
 
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'IMPORT' | 'HISTORY'>('IMPORT');
+  const [jobPage, setJobPage] = useState(1);
 
   const { data: departments = [] } = useQuery<IDepartment[]>({
     queryKey: ['departments-select'],
@@ -66,11 +147,14 @@ export const ImportPage: React.FC = () => {
     },
   });
 
-  const { data: importJobs = [], isLoading: jobsLoading } = useQuery<IImportJob[]>({
-    queryKey: ['import-jobs'],
+  const { data: importJobPage, isLoading: jobsLoading, isError: jobsError, error: jobsErrorDetails } = useQuery<{
+    jobs: IImportJob[];
+    meta?: PaginationMeta;
+  }>({
+    queryKey: ['import-jobs', jobPage],
     queryFn: async () => {
-      const res = await apiClient.get<{ success: boolean; data: IImportJob[] }>('/import/jobs?limit=20');
-      return res.data.data;
+      const res = await apiClient.get<{ success: boolean; data: IImportJob[]; meta?: PaginationMeta }>(`/import/jobs?page=${jobPage}&limit=20`);
+      return { jobs: res.data.data, meta: res.data.meta };
     },
     enabled: activeTab === 'HISTORY',
   });
@@ -122,6 +206,7 @@ export const ImportPage: React.FC = () => {
             semesters?: string;
             assignments?: string;
             timeslots?: string;
+            batches?: string;
           };
           isMasterWorkbook?: boolean;
         };
@@ -178,12 +263,17 @@ export const ImportPage: React.FC = () => {
     },
     onSuccess: (job) => {
       if (job) {
-        if (job.successRows === 0 && job.errorRows > 0) {
+        if (job.status === 'FAILED') {
           const firstErr = (job as any).rowErrors?.[0];
           const hint = firstErr ? ` First error: ${firstErr.message}` : '';
-          toast.error(
+          toast.warning(
             `All ${job.errorRows} rows failed — check your column mappings and that referenced Teachers, Subjects, and Semesters exist.${hint}`,
             'Import Failed'
+          );
+        } else if (job.status === 'PARTIAL') {
+          toast.error(
+            `Import partially completed: ${job.successRows} rows imported, ${job.errorRows} failed, ${job.skippedRows} skipped. Review Import History for details.`,
+            'Partial Import'
           );
         } else {
           toast.success(
@@ -241,11 +331,29 @@ export const ImportPage: React.FC = () => {
       { key: 'academicYear', label: 'Academic Year' },
       { key: 'departmentCode', label: 'Department Code' },
     ],
+    BATCHES: [
+      { key: 'semesterId', label: 'Semester ID (optional)' },
+      { key: 'name', label: 'Semester Name' },
+      { key: 'departmentCode', label: 'Department Code (optional)' },
+      { key: 'academicYear', label: 'Academic Year (optional)' },
+      { key: 'number', label: 'Semester Number (optional)' },
+      { key: 'section', label: 'Section (optional)' },
+      { key: 'batchCode', label: 'Batch Code' },
+      { key: 'studentCount', label: 'Student Count' },
+    ],
     ASSIGNMENTS: [
       { key: 'employeeId', label: 'Teacher Employee ID' },
+      { key: 'email', label: 'Teacher Email (alternative)' },
       { key: 'code', label: 'Subject Code' },
-      { key: 'name', label: 'Semester Name' },
+      { key: 'name', label: 'Semester Name (if not using ID)' },
+      { key: 'semesterId', label: 'Semester ID (name alternative)' },
+      { key: 'departmentCode', label: 'Department Code (for name lookup)' },
+      { key: 'academicYear', label: 'Academic Year (for name lookup)' },
+      { key: 'number', label: 'Semester Number (for name lookup)' },
+      { key: 'section', label: 'Section (for name lookup)' },
+      { key: 'batchCode', label: 'Batch Code (blank for theory, B1-B4 for labs)' },
       { key: 'weeklyPeriods', label: 'Weekly Periods' },
+      { key: 'location', label: 'Fixed Room (optional)' },
     ],
     TIMESLOTS: [
       { key: 'day', label: 'Day of Week' },
@@ -283,13 +391,18 @@ export const ImportPage: React.FC = () => {
     },
     {
       key: 'counts',
-      header: 'Processed / Success / Errors',
+      header: 'Processed / Imported / Failed / Skipped',
       render: (job) => (
         <div className="text-xs font-mono">
-          <span className="text-emerald-400 font-bold">{job.successRows} success</span> /{' '}
-          <span className="text-rose-400 font-bold">{job.errorRows} errors</span> ({job.totalRows} total)
+          {job.processedRows} / <span className="text-emerald-400 font-bold">{job.successRows}</span> /{' '}
+          <span className="text-rose-400 font-bold">{job.errorRows}</span> / {job.skippedRows ?? 0} ({job.totalRows} total)
         </div>
       ),
+    },
+    {
+      key: 'details',
+      header: 'Details',
+      render: (job) => <ImportJobDetails job={job} />,
     },
     {
       key: 'createdAt',
@@ -327,7 +440,17 @@ export const ImportPage: React.FC = () => {
       </div>
 
       {activeTab === 'HISTORY' ? (
-        <DataTable columns={historyColumns} data={importJobs} isLoading={jobsLoading} />
+        <>
+          {jobsError && <div role="alert" className="rounded border border-rose-500/40 bg-rose-950/20 p-3 text-sm text-rose-200">Could not load import history: {(jobsErrorDetails as Error).message}</div>}
+          <DataTable
+            columns={historyColumns}
+            data={importJobPage?.jobs ?? []}
+            meta={importJobPage?.meta}
+            onPageChange={setJobPage}
+            isLoading={jobsLoading}
+            emptyMessage="No import jobs are available yet."
+          />
+        </>
       ) : (
         <div className="space-y-6">
           {/* Step 1: Configuration & File Dropzone */}
@@ -347,6 +470,7 @@ export const ImportPage: React.FC = () => {
                   { value: 'SUBJECTS', label: 'Courses & Subjects' },
                   { value: 'CLASSROOMS', label: 'Classrooms & Labs' },
                   { value: 'SEMESTERS', label: 'Semesters & Student Batches' },
+                  { value: 'BATCHES', label: 'Student Batches' },
                   { value: 'ASSIGNMENTS', label: 'Teaching Assignments' },
                   { value: 'TIMESLOTS', label: 'Time Slots' },
                 ]}
@@ -442,6 +566,7 @@ export const ImportPage: React.FC = () => {
                       { key: 'subjects', name: 'Subjects', icon: '📚', desc: 'Courses, credits, & lab flags' },
                       { key: 'classrooms', name: 'Classrooms', icon: '🏛️', desc: 'Rooms, labs & capacities' },
                       { key: 'semesters', name: 'Semesters', icon: '🎓', desc: 'Batches, sections & student count' },
+                      { key: 'batches', name: 'Batches', icon: '👥', desc: 'Explicit batch rosters and strengths' },
                       { key: 'assignments', name: 'Assignments', icon: '🔗', desc: 'Teacher ↔ Subject ↔ Room' },
                       { key: 'timeslots', name: 'TimeSlots', icon: '⏰', desc: 'Periods, breaks, & hours' },
                     ].map((entity) => {
@@ -484,8 +609,8 @@ export const ImportPage: React.FC = () => {
                   <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-300 flex items-start gap-3">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-semibold text-slate-100">Zero-Config Relational Resolution: </span>
-                      The system automatically links Teacher Employee IDs, Subject Codes, Semester Names, and Room Numbers together across sheets in sequential order. No manual column matching required!
+                      <span className="font-semibold text-slate-100">Relational Resolution: </span>
+                      Teacher IDs, subject codes, and room numbers link across sheets. Assignment rows must include a MongoDB Semester ID or the complete semester identity; semester numbers belong in the Number column, and lab rows must identify B1-B4.
                     </div>
                   </div>
 
@@ -508,6 +633,16 @@ export const ImportPage: React.FC = () => {
               ) : (
                 /* Single Sheet Column Mapping Flow */
                 <>
+                  {parseResult.sheetNames.length > 1 && (
+                    <div role="alert" className="rounded border border-amber-500/40 bg-amber-950/20 p-3 text-xs text-amber-200">
+                      This workbook has {parseResult.sheetNames.length} worksheets. Single-entity imports only process one worksheet. Select Master Workbook to process all named entity sheets, or upload a single-sheet file.
+                    </div>
+                  )}
+                  {importType === 'ASSIGNMENTS' && (
+                    <div className="rounded border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-100">
+                      Resolve each semester with its MongoDB Semester ID, or provide Semester Name, Department Code, Academic Year, Semester Number, and Section. Put values like 3 in Semester Number, not Semester ID. Lab rows need batch code B1-B4; leave it blank for theory.
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {requiredFieldsByType[importType].map((field) => (
                       <div key={field.key} className="space-y-1.5 p-3 rounded-xl border border-slate-800 bg-slate-950/60">
@@ -570,6 +705,7 @@ export const ImportPage: React.FC = () => {
                       variant="teal"
                       size="lg"
                       isLoading={executeMutation.isPending}
+                      disabled={parseResult.sheetNames.length > 1}
                       onClick={() => executeMutation.mutate()}
                       leftIcon={<Check className="w-4 h-4" />}
                     >
@@ -655,15 +791,17 @@ export const ImportPage: React.FC = () => {
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-200">5. Sheet: Assignments</span>
-                  <Badge variant="teal" size="sm">6 cols</Badge>
+                  <Badge variant="teal" size="sm">12 cols</Badge>
                 </div>
                 <ul className="text-xs space-y-1 text-slate-400">
                   <li><code className="text-teal-300">employeeId</code>: Teacher ID</li>
                   <li><code className="text-teal-300">code</code>: Subject Code</li>
-                  <li><code className="text-teal-300">name</code>: Semester Name</li>
+                  <li><code className="text-teal-300">semesterId</code>: Stable semester ID (alternative)</li>
+                  <li><code className="text-teal-300">name</code>, <code className="text-teal-300">departmentCode</code></li>
+                  <li><code className="text-teal-300">academicYear</code>, <code className="text-teal-300">number</code>, <code className="text-teal-300">section</code>: Required together for name lookup</li>
+                  <li><code className="text-teal-300">batchCode</code>: Blank for theory; B1-B4 for labs</li>
                   <li><code className="text-teal-300">weeklyPeriods</code>: Number of periods</li>
                   <li><code className="text-slate-500">location</code>: Preferred room (optional)</li>
-                  <li><code className="text-slate-500">batchCode</code>: B1, B2 (for lab batches)</li>
                 </ul>
               </div>
 

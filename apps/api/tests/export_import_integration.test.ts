@@ -31,4 +31,29 @@ describe('Import & Export Service Integration', () => {
     expect(parsed.suggestedMapping).toHaveProperty('building', 'Building');
     expect(parsed.suggestedMapping).toHaveProperty('capacity', 'Capacity');
   });
+
+  it('does not map Department Code as the subject Code column', () => {
+    const mapping = importService.suggestMappingForHeaders(['Department Code', 'Subject Code', 'Semester']);
+
+    expect(mapping.departmentCode).toBe('Department Code');
+    expect(mapping.code).toBe('Subject Code');
+    expect(mapping.name).toBe('Semester');
+  });
+
+  it('generates a master template with disambiguating assignment semester identity', () => {
+    const parsed = importService.parseUploadedBuffer(importService.generateMasterTemplate(), 'master.xlsx');
+    const assignments = parsed.sheets?.Assignments;
+
+    expect(parsed.isMasterWorkbook).toBe(true);
+    expect(assignments?.headers).toContain('departmentCode');
+    expect(assignments?.headers).toContain('academicYear');
+    expect(assignments?.headers).toContain('number');
+    expect(assignments?.headers).toContain('section');
+    expect(assignments?.allRows[0]).toMatchObject({
+      departmentCode: 'IT',
+      academicYear: '2025-2026',
+      number: 5,
+      section: 'A',
+    });
+  });
 });

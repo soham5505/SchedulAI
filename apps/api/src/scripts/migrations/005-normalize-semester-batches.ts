@@ -25,7 +25,7 @@ import { SubjectModel } from '../../models/subject.model.js';
 
 const DRY_RUN = process.env.DRY_RUN !== 'false';
 const TARGET_LEVELS = new Set([3, 5, 7]);
-const SEMESTER_PATTERN = /^SEM\s+(3|5|7)\s*-\s*B([1-4])$/i;
+const SEMESTER_PATTERN = /^SEM\s+(3|5|7)\s*-\s*B([1-4])(?:\s+\([^)]*\))?$/i;
 
 function isLabAssignment(assignment: any, subject: any): boolean {
   return Boolean(

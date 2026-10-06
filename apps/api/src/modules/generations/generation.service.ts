@@ -72,7 +72,9 @@ export class GenerationService {
       const subject = assignment?.subjectId as Record<string, unknown> | null | undefined;
       const batchId = assignment?.batchId ? String(assignment.batchId) : null;
       const classroom = assignment?.classroomId as Record<string, unknown> | null | undefined;
-      const classroomId = assignment?.classroomId ? String(assignment.classroomId) : null;
+      const classroomId = assignment?.classroomId
+        ? String(classroom?._id ?? assignment.classroomId)
+        : null;
 
       if (!semesterId || !semesterIds.has(semesterId)) {
         invalid.push({
@@ -158,17 +160,27 @@ export class GenerationService {
           return null;
         }
 
+        const classroomIdRaw = a.classroomId as Record<string, unknown> | string | null | undefined;
+        const classroomIdStr = classroomIdRaw && typeof classroomIdRaw === 'object' && '_id' in classroomIdRaw
+          ? String(classroomIdRaw._id)
+          : (classroomIdRaw ? String(classroomIdRaw) : undefined);
+
+        const batchIdRaw = a.batchId as Record<string, unknown> | string | null | undefined;
+        const batchIdStr = batchIdRaw && typeof batchIdRaw === 'object' && '_id' in batchIdRaw
+          ? String(batchIdRaw._id)
+          : (batchIdRaw ? String(batchIdRaw) : undefined);
+
         const record = {
           id: a._id?.toString?.() ?? String(a._id ?? ''),
           teacherId: String(teacher._id),
           subjectId: String(subject._id),
           semesterId: a.semesterId?.toString?.() ?? String(a.semesterId),
-          ...(a.batchId ? { batchId: a.batchId.toString() } : {}),
-          ...(a.classroomId ? { classroomId: a.classroomId.toString() } : {}),
+          ...(batchIdStr ? { batchId: batchIdStr } : {}),
+          ...(classroomIdStr ? { classroomId: classroomIdStr } : {}),
           classroomRequirements: a.classroomRequirements || [],
           periodsPerWeek: a.periodsPerWeek,
           isLab: Boolean(a.isLab || subject.isLab),
-          key: `${String(teacher._id)}|${String(subject._id)}|${a.semesterId?.toString?.() ?? String(a.semesterId)}|${a.batchId?.toString?.() ?? 'ALL'}`,
+          key: `${String(teacher._id)}|${String(subject._id)}|${a.semesterId?.toString?.() ?? String(a.semesterId)}|${batchIdStr ?? 'ALL'}`,
         };
 
         return record;
@@ -296,9 +308,20 @@ export class GenerationService {
 
       // Build semesterId -> total batch students map
       const semesterBatchStudentSum = new Map<string, number>();
+      const invalidBatchCountSemesters = new Set<string>();
+      const batchStudentCountMap = new Map<string, number>();
       for (const b of batches) {
         const sid = b.semesterId.toString();
-        semesterBatchStudentSum.set(sid, (semesterBatchStudentSum.get(sid) ?? 0) + b.studentCount);
+        const studentCount = Number(b.studentCount);
+        if (!Number.isFinite(studentCount) || studentCount <= 0) {
+          invalidBatchCountSemesters.add(sid);
+          continue;
+        }
+        batchStudentCountMap.set(b._id.toString(), studentCount);
+        semesterBatchStudentSum.set(sid, (semesterBatchStudentSum.get(sid) ?? 0) + studentCount);
+      }
+      for (const semesterId of invalidBatchCountSemesters) {
+        semesterBatchStudentSum.set(semesterId, 0);
       }
 
       // Max capacity of any available non-lab lecture room
@@ -320,8 +343,20 @@ export class GenerationService {
         batchCodeMap: new Map(batches.map((batch) => [batch._id.toString(), batch.code])),
         availableClassroomIds,
         classroomIsLabMap: new Map(classrooms.map((classroom) => [classroom._id.toString(), Boolean(classroom.isLab)])),
+        classroomTypeMap: new Map(classrooms.map((classroom) => [classroom._id.toString(), String(classroom.type)])),
+        classroomEquipmentMap: new Map(classrooms.map((classroom) => [classroom._id.toString(), classroom.equipment || []])),
         semesterBatchStudentSum,
+        semesterStudentCountMap: new Map(semesters.map((semester) => [
+          semester._id.toString(),
+          Number.isFinite(Number(semester.studentCount)) && Number(semester.studentCount) > 0
+            ? Number(semester.studentCount)
+            : 0,
+        ])),
+        batchStudentCountMap,
         maxLectureRoomCapacity,
+        maxLabRoomCapacity: classrooms
+          .filter((classroom) => classroom.isLab)
+          .reduce((max, classroom) => Math.max(max, Number(classroom.capacity) || 0), 0),
         classroomCapacityMap,
         enforceClassroomCapacity: true,
       };
