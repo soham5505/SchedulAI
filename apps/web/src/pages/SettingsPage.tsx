@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../api/client.js';
+import { API_ORIGIN, apiClient } from '../api/client.js';
 import { Card } from '../components/ui/Card.js';
 import { Badge } from '../components/ui/Badge.js';
 import { Button } from '../components/ui/Button.js';
@@ -22,7 +22,7 @@ export const SettingsPage: React.FC = () => {
         const res = await apiClient.get('/health');
         return res.data;
       } catch {
-        const fallback = await apiClient.get('/health', { baseURL: '' });
+        const fallback = await apiClient.get(`${API_ORIGIN}/health`);
         return fallback.data;
       }
     },

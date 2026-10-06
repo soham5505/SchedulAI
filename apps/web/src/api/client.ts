@@ -1,8 +1,11 @@
 import axios from 'axios';
 import { ApiResponse, ApiErrorResponse } from '@schedulai/shared-types';
 
+export const API_ORIGIN = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+const API_BASE_URL = `${API_ORIGIN}/api/v1`;
+
 export const apiClient = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -66,7 +69,7 @@ apiClient.interceptors.response.use(
 
       try {
         const { data } = await axios.post<ApiResponse<{ tokens: { accessToken: string; refreshToken: string } }>>(
-          '/api/v1/auth/refresh',
+          `${API_BASE_URL}/auth/refresh`,
           { refreshToken }
         );
 
